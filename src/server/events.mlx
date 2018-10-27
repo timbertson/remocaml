@@ -1,0 +1,7 @@
+module Listener
+	type t = Lwt_stream.t
+end
+
+type listeners = Listener.t list
+
+let init () = []

@@ -1,0 +1,23 @@
+; vim: set syntax=lisp commentstring=;\ %s:
+(jbuild_version 1)
+
+(executable (
+	(name main)
+	; (public_name remocaml)
+	(libraries (
+		remo_common
+		lwt
+		logs.fmt
+		cohttp
+		cohttp.lwt
+		cohttp-lwt-unix
+	))
+	(preprocess (pps (lwt.ppx)))
+))
+
+(alias (
+	(name all)
+	(deps (
+		main.exe
+	))
+))

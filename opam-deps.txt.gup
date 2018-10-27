@@ -1,0 +1,2 @@
+#!bash -eu
+ocamlfind list | awk '{print $1}' | xargs -n1 ocamlfind query | uniq > "$1"
