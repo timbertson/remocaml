@@ -1,0 +1,41 @@
+<html lang="en">
+	<head>
+		<meta charset="utf-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+		<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+		<!-- <link rel="icon" href="/res/images/16.png"/> -->
+		<!-- <link rel="icon" href="/res/images/32.png" sizes="32x32"/> -->
+		<!-- <link rel="icon" href="/res/images/128.png" sizes="128x128"/> -->
+		<!-- <link href="style.css" rel="stylesheet"/> -->
+		<title>Remote</title>
+	</head>
+	<body>
+		<div id="main">
+			<div class="container main">
+				<h4 class="text-center text-muted">Loading...</h4>
+			</div>
+		</div>
+		<script>
+			window.onerror = function(error) {
+				console.error(error);
+				var elem = document.getElementById('main');
+				elem.innerHTML = '';
+
+				var outer = document.createElement('div');
+				outer.setAttribute('class', 'uncaught-error');
+				elem.appendChild(outer);
+				var tag = function(name, text) {
+					var node=document.createElement(name);
+					node.appendChild(document.createTextNode(text));
+					outer.appendChild(node);
+				};
+
+				tag('h1', 'Uncaught Error');
+				tag('p', 'Sorry, an uncaught error occurred:');
+				tag('p', String(error));
+				tag('p', 'Please reload the page to try again');
+			}
+		</script>
+		<script src="main.bc.js"></script>
+	</body>
+</html>

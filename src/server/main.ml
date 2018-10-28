@@ -7,6 +7,13 @@ open Remo_common
 module R = Rresult_ext
 module Log = (val (Logs.src_log (Logs.Src.create "main")))
 
+module StringSet = Set.Make(String)
+
+let static_files = StringSet.of_list [
+	"index.html";
+	"main.bc.js";
+]
+
 type 'a http_result = ('a, (Code.status_code * Sexp.t)) result
 
 let catch_exn ?code f =
@@ -31,21 +38,25 @@ let handler conn req body =
 	let unknown () =
 		let meth = meth |> Code.string_of_method in
 		let headers = req |> Request.headers |> Header.to_string in
+		let uri = Uri.to_string uri in
 		let%lwt body = body |> Body.to_string |> Lwt.map (fun body ->
 			(Printf.sprintf "Uri: %s\nPath: %s\nMethod: %s\nHeaders\nHeaders: %s\nBody: %s"
-				(Uri.to_string uri)
-				path
-				meth
-				headers
-				body
+				uri path meth headers body
 			)) in
 		Server.respond_string ~status:`Not_found ~body ()
 	in
 
-	match (meth, path) with
-		| (`GET, "/") -> unknown ()
+	let serve_file path =
+		Log.debug (fun m->m"responding with file %s" path);
+		Server.respond_file ~fname:(Filename.concat "_build/default/src/www" path) ()
+	in
 
-		| (`GET, "/events") ->
+	let path_without_slash =  String.sub path 1 ((String.length path) - 1) in
+	let response = match (meth, path_without_slash) with
+		| (`GET, "") -> serve_file "index.html"
+		| (`GET, path) when StringSet.mem path static_files -> serve_file path
+
+		| (`GET, "events") ->
 			let (event_stream, push) = Lwt_stream.create () in
 			let rec loop = fun () ->
 				Log.app (fun m->m"sleepgin");
@@ -89,6 +100,16 @@ let handler conn req body =
 		)
 
 		| _ -> unknown ()
+	in
+	response |> Lwt.map (fun response ->
+		let (http_response, _body) = response in
+		Log.debug (fun m->m"%s %s -> %s"
+			(Code.string_of_method meth) path
+			(Code.string_of_status (Response.status http_response))
+		);
+		response
+	)
+
 
 let () =
 	Logs.set_level (

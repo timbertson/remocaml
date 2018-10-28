@@ -24,6 +24,7 @@
 (alias (
 	(name all)
 	(deps (
+		index.html
 		main.bc.js
 	))
 ))

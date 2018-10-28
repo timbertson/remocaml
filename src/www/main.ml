@@ -34,6 +34,12 @@ let () = (
 		)
 	) in
 	Logs.set_level ~all:true (Some app_level);
-	vdoml_level |> Option.default app_level |> Ui.set_log_level
+	vdoml_level |> Option.default app_level |> Ui.set_log_level;
+	let event_source = new%js EventSource.eventSource (Js.string "/events") in
+	event_source##.onmessage := Dom.handler (fun event ->
+		let data = event##.data |> Js.to_string in
+		Log.info(fun m->m"Got event: %s" data);
+		Js._true
+	)
 )
 
