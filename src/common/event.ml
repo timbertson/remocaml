@@ -1,5 +1,3 @@
-(* open Sexplib *)
-
 type command =
 	| Music_command of Music.command
 	| Job_command of Job.command

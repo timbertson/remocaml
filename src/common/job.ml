@@ -1,8 +1,18 @@
 open Sexplib.Std
 
-type job = {
+type job_identity = {
 	id: string;
 	name: string;
+} [@@deriving sexp]
+
+type job_state = {
+	running: bool;
+	output: string list option;
+} [@@deriving sexp, fields]
+
+type job = {
+	job: job_identity;
+	state: job_state;
 } [@@deriving sexp]
 
 type command =

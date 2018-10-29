@@ -4,6 +4,7 @@ open Cohttp_lwt
 open Cohttp_lwt_unix
 open Sexplib
 open Remo_common
+open Util
 module R = Rresult_ext
 module Log = (val (Logs.src_log (Logs.Src.create "main")))
 
@@ -16,10 +17,9 @@ let static_files = StringSet.of_list [
 
 type 'a http_result = ('a, (Code.status_code * Sexp.t)) result
 
-let catch_exn ?code f =
-	try Ok (f ())
-	with err ->
-		Error (code |> Option.default `Internal_server_error, Conv.sexp_of_exn err)
+let wrap_exn ?(code:Code.status_code option) f a = (R.wrap f) a |> R.reword_error (fun err ->
+	(code |> Option.default `Internal_server_error, err)
+)
 
 let stream_conns = ref []
 let conn_closed closed =
@@ -84,13 +84,10 @@ let handler conn req body =
 				"Cache-Control", "no-cache";
 				"Content-Type", "text/event-stream";
 			] in
-			Server.respond ~headers ~flush:true ~status:`OK ~body:(Body.of_stream response) () 
+			Server.respond ~headers ~flush:true ~status:`OK ~body:(Body.of_stream response) ()
 		| (`POST, "/send") -> (
 			let%lwt body = body |> Cohttp_lwt.Body.to_string in
-			let event = catch_exn ~code:`Bad_request (fun () ->
-				(Event.event_of_sexp (Sexp.of_string body))
-			) in
-
+			let event = body |> wrap_exn ~code:`Bad_request (Event.event_of_sexp % Sexp.of_string) in
 			let response = event |> R.map (fun event -> (Event.sexp_of_event event)) in
 			let (status, body) = match response with
 				| Ok body -> (`OK, Ok body)
@@ -117,6 +114,8 @@ let () =
 	);
 	Logs.set_reporter (Logs_fmt.reporter ());
 	let state = State.init () in
+	let config = Server_config.load ~state_dir:("/tmp/remocaml") "config/remocaml.sexp" |> R.force in
+	Log.debug(fun m->m"config: %s" (Server_config.sexp_of_config config |> Sexp.to_string));
 	Log.info(fun m->m"initial state: %s" (State.sexp_of_state state |> Sexp.to_string));
 	let server = Server.create
 		~mode:(`TCP (`Port 8000))
