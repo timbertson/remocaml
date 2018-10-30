@@ -23,6 +23,11 @@ type event =
 	Job_running of bool
 	[@@deriving sexp]
 
+type process_state =
+	| Running
+	| Exited of int option
+	[@@deriving sexp]
+
 type state = {
 	jobs: job list;
 } [@@deriving sexp]

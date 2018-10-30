@@ -25,3 +25,9 @@ let force : 'a. ('a, Sexp.t) result -> 'a = function
 	| Error err -> failwith (Sexp.to_string err)
 
 let bindr fn a = bind a fn
+
+let collect results = results |> List.fold_left (fun acc item ->
+	match (acc, item) with
+		| Ok acc, Ok item -> Ok (item :: acc)
+		| Error _ as err, _ | Ok _, (Error _ as err) -> err
+) (Ok []) |> map (List.rev)

@@ -31,7 +31,7 @@ let conn_closed closed =
 	let final_cons = !stream_conns |> List.length in
 	Log.info(fun m->m"open conns is %d (was %d)" final_cons initial_cons)
 
-let handler conn req body =
+let handler ~state = fun conn req body ->
 	let uri = req |> Request.uri in
 	let path = Uri.path uri in
 	let meth = req |> Request.meth in
@@ -74,6 +74,7 @@ let handler conn req body =
 			in
 			stream_conns := conn :: !stream_conns;
 			Lwt.async (loop);
+			push (Some (Ok (Reset_state (!state |> Server_state.client_state))));
 			let response = event_stream |> Lwt_stream.map (fun event ->
 				event |> R.map Event.sexp_of_event
 				|> R.sexp_of_result
@@ -113,12 +114,11 @@ let () =
 		try (Unix.getenv "LOG_LEVEL" |> Logs.level_of_string |> R.get_ok) with _ -> Some (Logs.Info)
 	);
 	Logs.set_reporter (Logs_fmt.reporter ());
-	let state = State.init () in
 	let config = Server_config.load ~state_dir:("/tmp/remocaml") "config/remocaml.sexp" |> R.force in
-	Log.debug(fun m->m"config: %s" (Server_config.sexp_of_config config |> Sexp.to_string));
-	Log.info(fun m->m"initial state: %s" (State.sexp_of_state state |> Sexp.to_string));
+	let server_state = Server_state.load config |> R.force in
+	Log.debug(fun m->m"server state: %s" (Server_state.sexp_of_state server_state |> Sexp.to_string));
 	let server = Server.create
 		~mode:(`TCP (`Port 8000))
 		~on_exn:(fun _ -> Log.warn (fun m->m"Error in server; ignoring"))
-		(Server.make ~callback:handler ()) in
+		(Server.make ~callback:(handler ~state:(ref server_state)) ()) in
 	ignore (Lwt_main.run server)

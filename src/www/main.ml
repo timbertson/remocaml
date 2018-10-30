@@ -37,7 +37,7 @@ end
 
 let update state : (Event.event, Sexp.t) result -> Ui_state.t = function
 	| Error err -> { state with error = Some err }
-	| Ok evt -> { state with server_state = State.update state.server_state evt }
+	| Ok evt -> { state with server_state = Event.update state.server_state evt }
 
 let view instance = function _state ->
 	let open Html in

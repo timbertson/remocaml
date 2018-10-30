@@ -8,11 +8,6 @@ type job_configuration = {
 	command: string list;
 } [@@deriving sexp]
 
-type running_job = {
-	pid: int;
-	output: Unix.file_descr;
-}
-
 type config = {
 	state_directory: string;
 	config_path: string;
@@ -23,10 +18,22 @@ open Sexp
 
 let unparseable sexp = Error (List [Atom "Unparseable"; sexp])
 
+let parse_cmd cmd : (string list, Sexp.t) result = cmd |> List.map (function
+	| Atom arg -> Ok arg
+	| other -> unparseable other
+) |> R.collect
+
 let parse_jobs jobs =
-	jobs |> List.fold_left (fun jobs job -> R.bind jobs (fun _jobs -> match job with
-	| _x -> unparseable (Atom "TODO")
-	)) (Ok [])
+	jobs |> List.map (fun job -> match job with
+		| List [Atom id; Atom name; List command] ->
+				parse_cmd command |> R.map (fun command ->
+					{
+						job = Job.{ id; name };
+						command;
+					}
+				)
+		| other -> unparseable other
+	) |> R.collect
 
 let parse_config conf = function
 	| List [Atom "jobs"; List jobs] ->
