@@ -31,3 +31,12 @@ let collect results = results |> List.fold_left (fun acc item ->
 		| Ok acc, Ok item -> Ok (item :: acc)
 		| Error _ as err, _ | Ok _, (Error _ as err) -> err
 ) (Ok []) |> map (List.rev)
+
+let partition results =
+	let ok = ref [] in
+	let err = ref [] in
+	results |> List.iter (function
+		| Ok x -> ok := x :: !ok
+		| Error x -> err := x :: !err
+	);
+	(List.rev !ok, List.rev !err)

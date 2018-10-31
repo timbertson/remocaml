@@ -1,9 +1,13 @@
 open Remo_common
+open List_ext
 open Util
 module R = Rresult_ext
-(* open Astring *)
-(* open Sexplib *)
+open Astring
+open Sexplib
 open Sexplib.Std
+open Sexplib.Conv
+module Log = (val (Logs.src_log (Logs.Src.create "server_state")))
+module StringMap = Map.Make(String)
 
 module Unix = struct
 	include Unix
@@ -13,55 +17,116 @@ module Unix = struct
 	let file_descr_of_sexp = file_descr_of_int % int_of_sexp
 end
 
-type running_job = {
-	running_job_id: Job.job_identity;
+type job_execution = {
+	job_id: string;
 	pid: int;
-	stdout: Unix.file_descr; (* TODO: how to specify sexp? *)
+	ex_state: Job.process_state;
+	stdout: (Unix.file_descr, Sexp.t) result Lazy.t sexp_opaque;
 	output_buffer: string list option;
 	display_output: bool;
-} [@@deriving sexp]
+} [@@deriving sexp_of]
+
+type server_job = {
+	job_configuration: Server_config.job_configuration;
+	execution: job_execution option;
+} [@@deriving sexp_of]
 
 type state = {
 	server_config: Server_config.config;
 	server_music_state: Music.state;
-	server_jobs: running_job list;
-} [@@deriving sexp]
+	server_jobs: server_job list;
+} [@@deriving sexp_of]
 
-let pid_status =
-	(* TODO: Unix.kill? *)
-	Job.Exited None
+type pid_status = {
+	ps_pid: int;
+	ps_state: Job.process_state;
+} [@@deriving sexp]
 
 (* open Sexp *)
 
-let load = R.wrap (fun server_config ->
-	(* let dir = config.Server_config.state_directory in *)
-	(* let files = Unix.readdir config.Server_config.state_directory in *)
-	(* let pids = List.map (String.cut ~rev:true sep:".") |> List.filter_map (function *)
-	(* 	| pid, "" -> *)
-	(* 			let pid = try Some int_of_string pid with Failure _ -> None in *)
-	(* 			{ pid; state = Job.pid_status pid; } *)
-  (*  *)
-	(* 				pid =  *)
-	(* 				state = ext) with Failure -> None *)
-	(* 			try (Some { *)
-	(* 				pid = int_of_string pid; *)
-	(* 				state = ext) with Failure -> None *)
-	(* 	| pid, ext ->  *)
-	(* in *)
-	{
-		server_config;
-		server_music_state = Music.init ();
-		server_jobs = []; (* TODO *)
-	}
-)
+let is_running pid =
+	let open Unix in
+	try
+		kill pid 0;
+		true
+	with
+		Unix_error (ESRCH, _, _) -> false
+
+let update_process_state pid = let open Job in function
+	| Exited _ as state -> state
+	| Running -> if is_running pid then Running else Exited None
+
+let load config =
+	let state_dir = config.Server_config.state_directory in
+	R.wrap Sys.readdir state_dir |> R.map (fun files ->
+		(* TODO: delete old files! *)
+		let pid_states = files |> Array.to_list |> List.filter_map (fun filename ->
+			match String.cut ~rev:true ~sep:"." filename with
+				| Some (job_id, "status") ->
+						let full_path = Filename.concat state_dir filename in
+						Some (full_path |> R.wrap (fun path ->
+							(job_id, pid_status_of_sexp (Sexp.load_sexp ~strict:true path))
+						) |> R.reword_error (fun cause -> let open Sexp in
+							List [ List [Atom "path"; Atom full_path]; cause]
+						))
+				| _ -> None
+		) in
+		let pid_states, pid_errs = R.partition pid_states in
+		pid_errs |> List.iter (fun err ->
+			Log.warn (fun m->m"%s" (Sexp.to_string err))
+		);
+
+		let executions = pid_states |> List.map (fun (job_id, st) ->
+			let stdout_path = Filename.concat state_dir job_id ^ ".out" in
+			let open_stdout () = Unix.openfile stdout_path Unix.[O_RDONLY; O_CLOEXEC] 0x400 in
+			{
+				job_id;
+				pid = st.ps_pid;
+				ex_state = update_process_state st.ps_pid st.ps_state;
+				stdout = lazy (R.wrap open_stdout ());
+				output_buffer = None;
+				display_output = false;
+			}
+		) in
+
+		(* Make a map of (ref config, ref running_job) *)
+		let job_map = config.Server_config.jobs |> List.fold_left (fun map job_conf ->
+			StringMap.add (job_conf.Server_config.job.Job.id) (Some job_conf, None) map
+		) StringMap.empty in
+
+		let job_map = executions |> List.fold_left (fun map job ->
+			let record = match StringMap.find_opt job.job_id map with
+				| Some (conf, _) -> (conf, Some job)
+				| None -> (None, Some job)
+			in
+			StringMap.add job.job_id record map
+		) job_map in
+
+		let server_jobs = StringMap.fold (fun _key value jobs ->
+			match value with
+				| None, None -> jobs (* can't actually happen *)
+				| None, Some job ->
+						Log.warn (fun m->m"Running job has no corresponding configuration: %s" job.job_id);
+						jobs
+				| Some conf, execution ->
+					{ job_configuration = conf; execution } :: jobs
+		) job_map [] in
+		{
+			server_config = config;
+			server_music_state = Music.init ();
+			server_jobs;
+		}
+	)
 
 let running_client_job job =
 	Job.({
-		job = job.running_job_id;
-		state = {
-			running = true; (* Status enum? *)
-			output = if job.display_output then job.output_buffer else None;
-		}
+		job = job.job_configuration.Server_config.job;
+		state = job.execution |> Option.map (fun execution ->
+			{
+				process_state = execution.ex_state;
+				output = if execution.display_output then execution.output_buffer else None;
+			}
+		)
 	})
 
 let client_state state =

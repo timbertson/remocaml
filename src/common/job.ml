@@ -5,14 +5,19 @@ type job_identity = {
 	name: string;
 } [@@deriving sexp]
 
+type process_state =
+	| Running
+	| Exited of int option
+	[@@deriving sexp]
+
 type job_state = {
-	running: bool;
+	process_state: process_state;
 	output: string list option;
 } [@@deriving sexp, fields]
 
 type job = {
 	job: job_identity;
-	state: job_state;
+	state: job_state option;
 } [@@deriving sexp]
 
 type command =
@@ -21,11 +26,6 @@ type command =
 
 type event =
 	Job_running of bool
-	[@@deriving sexp]
-
-type process_state =
-	| Running
-	| Exited of int option
 	[@@deriving sexp]
 
 type state = {
