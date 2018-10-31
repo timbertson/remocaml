@@ -108,6 +108,11 @@ let handler ~state = fun conn req body ->
 		response
 	)
 
+let play () =
+	let%lwt bus = OBus_bus.session () in
+	let%lwt proxy = OBus_bus.get_proxy bus "org.mpris.MediaPlayer2.rhythmbox" (OBus_path.of_string "org.mpris.MediaPlayer2") in
+	let%lwt () = Rhythmbox_client.Org_mpris_MediaPlayer2_Player.play_pause proxy in
+	Lwt.return_unit
 
 let () =
 	Logs.set_level (
@@ -121,4 +126,5 @@ let () =
 		~mode:(`TCP (`Port 8000))
 		~on_exn:(fun _ -> Log.warn (fun m->m"Error in server; ignoring"))
 		(Server.make ~callback:(handler ~state:(ref server_state)) ()) in
+	ignore (play ());
 	ignore (Lwt_main.run server)
