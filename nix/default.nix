@@ -35,6 +35,6 @@ stdenv.mkDerivation {
 				};
 			};
 		};
-	};
+	} ++ [pkgs.sassc];
 }
 

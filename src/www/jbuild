@@ -21,10 +21,20 @@
 	(preprocess (pps (lwt.ppx ppx_sexp_conv ppx_fields_conv js_of_ocaml.ppx)))
 ))
 
+(rule (
+	(targets (style.css))
+	(deps (style.scss))
+	; TODO: scss?
+	; (action (run cp style.scss ${@}))
+	(action (run sassc style.scss ${@}))
+))
+
 (alias (
 	(name all)
 	(deps (
 		index.html
+		style.css
+		bootstrap.min.css
 		main.bc.js
 	))
 ))

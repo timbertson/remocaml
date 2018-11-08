@@ -5,7 +5,10 @@ type state = {
 } [@@deriving sexp]
 
 type command =
-	Play
+	| Previous
+	| Play
+	| Pause
+	| Next
 	[@@deriving sexp]
 
 type event =

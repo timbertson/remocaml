@@ -9,11 +9,15 @@ module R = Rresult_ext
 module Log = (val (Logs.src_log (Logs.Src.create "main")))
 
 module StringSet = Set.Make(String)
+module StringMap = Map.Make(String)
 
 let static_files = StringSet.of_list [
 	"index.html";
 	"main.bc.js";
+	"style.css";
+	"bootstrap.min.css";
 ]
+let static_root = "_build/default/src/www"
 
 type 'a http_result = ('a, (Code.status_code * Sexp.t)) result
 
@@ -21,17 +25,7 @@ let wrap_exn ?(code:Code.status_code option) f a = (R.wrap f) a |> R.reword_erro
 	(code |> Option.default `Internal_server_error, err)
 )
 
-let stream_conns = ref []
-let conn_closed closed =
-	Log.info(fun m->m"Connection closed");
-	let initial_cons = !stream_conns |> List.length in
-	stream_conns := !stream_conns |> List.filter (fun conn ->
-		conn != closed
-	);
-	let final_cons = !stream_conns |> List.length in
-	Log.info(fun m->m"open conns is %d (was %d)" final_cons initial_cons)
-
-let handler ~state = fun conn req body ->
+let handler ~state ~static_cache = fun conn req body ->
 	let uri = req |> Request.uri in
 	let path = Uri.path uri in
 	let meth = req |> Request.meth in
@@ -46,36 +40,41 @@ let handler ~state = fun conn req body ->
 		Server.respond_string ~status:`Not_found ~body ()
 	in
 
-	let serve_file path =
-		Log.debug (fun m->m"responding with file %s" path);
-		Server.respond_file ~fname:(Filename.concat "_build/default/src/www" path) ()
+	let serve_static path =
+		(* TODO: etag? *)
+		match StringMap.find_opt path static_cache with
+			| Some cached -> Server.respond_string
+					~status:`OK
+					~body:cached ()
+			| None ->
+				Log.debug (fun m->m"responding with file %s" path);
+				Server.respond_file ~fname:(Filename.concat static_root path) ()
 	in
 
 	let path_without_slash =  String.sub path 1 ((String.length path) - 1) in
 	let response = match (meth, path_without_slash) with
-		| (`GET, "") -> serve_file "index.html"
-		| (`GET, path) when StringSet.mem path static_files -> serve_file path
+		| (`GET, "") -> serve_static "index.html"
+		| (`GET, path) when StringSet.mem path static_files -> serve_static path
 
 		| (`GET, "events") ->
-			let (event_stream, push) = Lwt_stream.create () in
-			let rec loop = fun () ->
-				Log.app (fun m->m"sleepgin");
-				let open Event in
-				let%lwt () = Lwt_unix.sleep 1.0 in
-				Log.app (fun m->m"Pushing event...");
-				push (Some (Ok (Music_event (Current_track (Some "mountain goats woo!")))));
-				let%lwt () = Lwt_unix.sleep 1.0 in
-				Log.app (fun m->m"Pushing event...");
-				push (Some (Ok (Music_event (Current_track None))));
-				if (List.mem conn !stream_conns) then
-					loop ()
-				else
-					Lwt.return_unit
-			in
-			stream_conns := conn :: !stream_conns;
-			Lwt.async (loop);
-			push (Some (Ok (Reset_state (!state |> Server_state.client_state))));
-			let response = event_stream |> Lwt_stream.map (fun event ->
+			(* let (event_stream, push) = Lwt_stream.create () in *)
+			(* let rec loop = fun () -> *)
+			(* 	Log.app (fun m->m"sleepgin"); *)
+			(* 	let open Event in *)
+			(* 	let%lwt () = Lwt_unix.sleep 1.0 in *)
+			(* 	Log.app (fun m->m"Pushing event..."); *)
+			(* 	push (Some (Ok (Music_event (Current_track (Some "mountain goats woo!"))))); *)
+			(* 	let%lwt () = Lwt_unix.sleep 1.0 in *)
+			(* 	Log.app (fun m->m"Pushing event..."); *)
+			(* 	push (Some (Ok (Music_event (Current_track None)))); *)
+			(* 	if (List.mem conn !stream_conns) then *)
+			(* 		loop () *)
+			(* 	else *)
+			(* 		Lwt.return_unit *)
+			(* in *)
+			let initial_state = Event.(Reset_state (!state |> Server_state.client_state)) in
+			let events = Connections.add_event_stream conn initial_state in
+			let response = events |> Lwt_stream.map (fun event ->
 				event |> R.map Event.sexp_of_event
 				|> R.sexp_of_result
 				|> fun s ->
@@ -109,10 +108,34 @@ let handler ~state = fun conn req body ->
 	)
 
 let play () =
-	let%lwt bus = OBus_bus.session () in
-	let%lwt proxy = OBus_bus.get_proxy bus "org.mpris.MediaPlayer2.rhythmbox" (OBus_path.of_string "org.mpris.MediaPlayer2") in
-	let%lwt () = Rhythmbox_client.Org_mpris_MediaPlayer2_Player.play_pause proxy in
+	let%lwt conn = Server_music.connect () in
+	let%lwt music_state = Server_music.state conn in
+
+	(* let%lwt bus = OBus_bus.session () in *)
+	(* let%lwt proxy = OBus_bus.get_proxy bus "org.mpris.MediaPlayer2.rhythmbox" (OBus_path.of_string "org.mpris.MediaPlayer2") in *)
+	(* let%lwt () = Rhythmbox_client.Org_mpris_MediaPlayer2_Player.play_pause proxy in *)
 	Lwt.return_unit
+
+let read_entire_file path =
+	(* TODO: surely there's a builtin? *)
+	let open Unix in
+	let f = openfile path [O_RDONLY; O_CLOEXEC] 0o600 in
+	let buf = Bytes.empty in
+	let rec read_chunk = fun offset ->
+		Log.debug(fun m->m"reading upto 1024 bytes into offset %d in %s (fd %d)"
+			offset path (Obj.magic f));
+		let bytes_read = read f buf offset 1024 in
+		Log.debug(fun m->m"read %d bytes into offset %d in %s"
+			bytes_read offset path);
+		if bytes_read > 0 then read_chunk (offset + bytes_read)
+	in
+	let () = try
+		read_chunk 0;
+	with e -> (
+		Log.err(fun m->m"Failed to read file %s" path);
+		raise e
+	) in
+	Bytes.to_string buf
 
 let () =
 	Logs.set_level (
@@ -122,9 +145,16 @@ let () =
 	let config = Server_config.load ~state_dir:("/tmp/remocaml") "config/remocaml.sexp" |> R.force in
 	let server_state = Server_state.load config |> R.force in
 	Log.debug(fun m->m"server state: %s" (Server_state.sexp_of_state server_state |> Sexp.to_string));
+	let static_cache = StringMap.empty in
+	(* Invalid_argument !?!?!? *)
+	(* let static_cache = StringSet.fold (fun path map -> *)
+	(* 	StringMap.add path (read_entire_file (Filename.concat static_root path)) map *)
+	(* ) static_files static_cache in *)
+
+	let callback = handler ~static_cache ~state:(ref server_state) in
 	let server = Server.create
 		~mode:(`TCP (`Port 8000))
 		~on_exn:(fun _ -> Log.warn (fun m->m"Error in server; ignoring"))
-		(Server.make ~callback:(handler ~state:(ref server_state)) ()) in
+		(Server.make ~callback ()) in
 	ignore (play ());
 	ignore (Lwt_main.run server)

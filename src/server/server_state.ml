@@ -1,6 +1,5 @@
 open Remo_common
 open List_ext
-open Util
 module R = Rresult_ext
 open Astring
 open Sexplib
@@ -9,14 +8,7 @@ open Sexplib.Conv
 module Log = (val (Logs.src_log (Logs.Src.create "server_state")))
 module StringMap = Map.Make(String)
 
-module Unix = struct
-	include Unix
-	let int_of_file_descr : file_descr -> int = Obj.magic
-	let file_descr_of_int : int -> file_descr = Obj.magic
-	let sexp_of_file_descr = sexp_of_int % int_of_file_descr
-	let file_descr_of_sexp = file_descr_of_int % int_of_sexp
-end
-
+(* A job execution. Either running or recently-run *)
 type job_execution = {
 	job_id: string;
 	pid: int;
@@ -26,17 +18,20 @@ type job_execution = {
 	display_output: bool;
 } [@@deriving sexp_of]
 
+(* a server's representation of a (possibly executing) job *)
 type server_job = {
 	job_configuration: Server_config.job_configuration;
 	execution: job_execution option;
 } [@@deriving sexp_of]
 
+(* entire server state *)
 type state = {
 	server_config: Server_config.config;
-	server_music_state: Music.state;
+	server_music_state: Server_music.state;
 	server_jobs: server_job list;
 } [@@deriving sexp_of]
 
+(* serialized to CONFIG_DIR/<job-id>.status *)
 type pid_status = {
 	ps_pid: int;
 	ps_state: Job.process_state;
@@ -56,8 +51,18 @@ let update_process_state pid = let open Job in function
 	| Exited _ as state -> state
 	| Running -> if is_running pid then Running else Exited None
 
+let ensure_config_dir config =
+	let rec ensure_exists dir =
+		try let _:Unix.stats = Unix.stat dir in ()
+		with Unix.Unix_error (Unix.ENOENT, _, _) -> (
+			ensure_exists (Filename.dirname dir);
+			Unix.mkdir dir 0o700
+		) in
+	ensure_exists config.Server_config.state_directory;
+	config.Server_config.state_directory
+
 let load config =
-	let state_dir = config.Server_config.state_directory in
+	let state_dir = ensure_config_dir config in
 	R.wrap Sys.readdir state_dir |> R.map (fun files ->
 		(* TODO: delete old files! *)
 		let pid_states = files |> Array.to_list |> List.filter_map (fun filename ->
@@ -78,7 +83,7 @@ let load config =
 
 		let executions = pid_states |> List.map (fun (job_id, st) ->
 			let stdout_path = Filename.concat state_dir job_id ^ ".out" in
-			let open_stdout () = Unix.openfile stdout_path Unix.[O_RDONLY; O_CLOEXEC] 0x400 in
+			let open_stdout () = Unix.openfile stdout_path Unix.[O_RDONLY; O_CLOEXEC] 0o600 in
 			{
 				job_id;
 				pid = st.ps_pid;
@@ -113,7 +118,7 @@ let load config =
 		) job_map [] in
 		{
 			server_config = config;
-			server_music_state = Music.init ();
+			server_music_state = Server_music.empty;
 			server_jobs;
 		}
 	)

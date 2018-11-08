@@ -13,36 +13,6 @@ open Sexplib
 open Sexplib.Std
 open Fieldslib
 
-let s = Js.string
-
-module Ui_state = struct
-	type t = {
-		server_state: State.state;
-		error: Sexp.t option;
-	} [@@deriving sexp, fields]
-
-	let init () = {
-		server_state = State.init ();
-		error = None;
-	}
-
-	let eq : t -> t -> bool = fun a b ->
-		let use op = fun field ->
-			op (Field.get field a) (Field.get field b)
-		in
-		Fields.for_all
-			~server_state:(use (=))
-			~error:(use (=))
-end
-
-let update state : (Event.event, Sexp.t) result -> Ui_state.t = function
-	| Error err -> { state with error = Some err }
-	| Ok evt -> { state with server_state = Event.update state.server_state evt }
-
-let view instance = function _state ->
-	let open Html in
-	div [text "Hello!"]
-
 let component tasks =
 	Ui.Tasks.sync tasks (fun instance ->
 		let event_source = new%js EventSource.eventSource (Js.string "/events") in
@@ -55,12 +25,12 @@ let component tasks =
 					|> R.bindr R.result_of_sexp
 					|> R.bindr (R.wrap Event.event_of_sexp)
 			in
-			Ui.emit instance event;
+			Ui.emit instance (Ui_state.Server_event event);
 			Js._true
 		)
 	);
 	let initial_state = Ui_state.init () in
-	Ui.root_component ~eq:Ui_state.eq ~update ~view initial_state
+	Ui.root_component ~eq:Ui_state.eq ~update:Ui_state.update ~view:View.view initial_state
 
 let () = (
 	Logs.set_reporter (Logs_browser.console_reporter ());

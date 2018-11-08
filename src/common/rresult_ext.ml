@@ -1,6 +1,9 @@
 include Rresult.R
 open Sexplib
 open Sexp
+
+type ('a,'b) result = ('a,'b) Pervasives.result (* alias for compatibility with sexp_conv *)
+
 let sexp_of_result = function
 	| Ok s -> List [Atom "Ok"; s]
 	| Error s -> List [Atom "Error"; s]
