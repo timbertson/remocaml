@@ -21,10 +21,6 @@ let static_root = "_build/default/src/www"
 
 type 'a http_result = ('a, (Code.status_code * Sexp.t)) result
 
-let wrap_exn ?(code:Code.status_code option) f a = (R.wrap f) a |> R.reword_error (fun err ->
-	(code |> Option.default `Internal_server_error, err)
-)
-
 let handler ~state ~static_cache = fun conn req body ->
 	let uri = req |> Request.uri in
 	let path = Uri.path uri in
@@ -57,23 +53,26 @@ let handler ~state ~static_cache = fun conn req body ->
 		| (`GET, path) when StringSet.mem path static_files -> serve_static path
 
 		| (`GET, "events") ->
-			(* let (event_stream, push) = Lwt_stream.create () in *)
-			(* let rec loop = fun () -> *)
-			(* 	Log.app (fun m->m"sleepgin"); *)
-			(* 	let open Event in *)
-			(* 	let%lwt () = Lwt_unix.sleep 1.0 in *)
-			(* 	Log.app (fun m->m"Pushing event..."); *)
-			(* 	push (Some (Ok (Music_event (Current_track (Some "mountain goats woo!"))))); *)
-			(* 	let%lwt () = Lwt_unix.sleep 1.0 in *)
-			(* 	Log.app (fun m->m"Pushing event..."); *)
-			(* 	push (Some (Ok (Music_event (Current_track None)))); *)
-			(* 	if (List.mem conn !stream_conns) then *)
-			(* 		loop () *)
-			(* 	else *)
-			(* 		Lwt.return_unit *)
-			(* in *)
-			let initial_state = Event.(Reset_state (!state |> Server_state.client_state)) in
-			let events = Connections.add_event_stream conn initial_state in
+			(* reconnect music peers on every connection. It's not that expensive,
+			 * and the mrpis peer may have changed *)
+			let current_state: Server_state.state = !state in
+			let%lwt music_peers = R.wrap_lwt Server_music.connect () in
+			let (peers, error_events) = (match music_peers with
+				| Ok peers -> (peers, [])
+				| Error err -> (Server_music.disconnected, [Error err])
+			) in
+			state := { current_state with
+				server_music_state = { current_state.Server_state.server_music_state with
+					peers;
+				}
+			};
+
+			(* TODO: trigger a refresh of music state *)
+			let client_state = !state |> Server_state.client_state in
+			let initialize_state = [
+				Ok (Event.(Reset_state client_state))
+			] in
+			let events = Connections.add_event_stream conn (error_events @ initialize_state) in
 			let response = events |> Lwt_stream.map (fun event ->
 				event |> R.map Event.sexp_of_event
 				|> R.sexp_of_result
@@ -85,15 +84,17 @@ let handler ~state ~static_cache = fun conn req body ->
 				"Content-Type", "text/event-stream";
 			] in
 			Server.respond ~headers ~flush:true ~status:`OK ~body:(Body.of_stream response) ()
-		| (`POST, "/send") -> (
-			let%lwt body = body |> Cohttp_lwt.Body.to_string in
-			let event = body |> wrap_exn ~code:`Bad_request (Event.event_of_sexp % Sexp.of_string) in
-			let response = event |> R.map (fun event -> (Event.sexp_of_event event)) in
+		| (`POST, "invoke") -> (
+			let%lwt command = body |> Cohttp_lwt.Body.to_string in
+			let command = command |> R.wrap (Event.command_of_sexp % Sexp.of_string) in
+			let%lwt response = command |> R.bind_lwt (fun command ->
+				Server_state.invoke !state command
+			) in
 			let (status, body) = match response with
-				| Ok body -> (`OK, Ok body)
-				| Error (status, body) -> (status, Error body)
+				| Ok () -> (`OK, "")
+				| Error err -> (`Internal_server_error, Sexp.to_string (R.sexp_of_error err))
 			in
-			Server.respond_string ~status ~body:(Sexp.to_string (R.sexp_of_result body)) ()
+			Server.respond_string ~status ~body ()
 		)
 
 		| _ -> unknown ()
@@ -106,15 +107,6 @@ let handler ~state ~static_cache = fun conn req body ->
 		);
 		response
 	)
-
-let play () =
-	let%lwt conn = Server_music.connect () in
-	let%lwt music_state = Server_music.state conn in
-
-	(* let%lwt bus = OBus_bus.session () in *)
-	(* let%lwt proxy = OBus_bus.get_proxy bus "org.mpris.MediaPlayer2.rhythmbox" (OBus_path.of_string "org.mpris.MediaPlayer2") in *)
-	(* let%lwt () = Rhythmbox_client.Org_mpris_MediaPlayer2_Player.play_pause proxy in *)
-	Lwt.return_unit
 
 let read_entire_file path =
 	(* TODO: surely there's a builtin? *)
@@ -156,5 +148,4 @@ let () =
 		~mode:(`TCP (`Port 8000))
 		~on_exn:(fun _ -> Log.warn (fun m->m"Error in server; ignoring"))
 		(Server.make ~callback ()) in
-	ignore (play ());
 	ignore (Lwt_main.run server)

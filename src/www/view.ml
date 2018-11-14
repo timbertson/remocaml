@@ -2,10 +2,11 @@ open Remo_common
 open Vdoml
 open Html
 open Ui_state
+open Sexplib
 
-let view_music instance =
+let view_music _instance =
 	let open Music in
-	let volumeIncrement = 1.0 /. 20.0 in
+	(* let volumeIncrement = 1.0 /. 20.0 in *)
 	let controls = [
 		Previous, "step-backward";
 		Play, "play";
@@ -13,34 +14,43 @@ let view_music instance =
 		Next, "step-forward";
 	] in
 
-	fun state ->
-		div (controls |> List.map (fun (command, icon) ->
-			span ~a:[a_class ("btn " ^ icon)] [
-				text icon(* tmp *)
+	let open Remo_common.Event in
+	fun _state ->
+		div (controls |> List.map (fun (cmd, icon) ->
+			span ~a:[a_class ("btn " ^ icon); a_onclick (emitter (Invoke (Music_command cmd)))] [
+				text icon (* tmp *)
 			]
 		))
 
-let view_job instance = fun state ->
+let view_job _instance = fun _state ->
 	empty
 
-let view_jobs instance = fun state ->
+let view_jobs _instance = fun _state ->
 	empty
 
-let view instance =
+let view ~show_debug instance =
 	let view_music = view_music instance in
 	function state ->
 		let open State in
-		let { server_state; _ } = state in
-		let { music_state } = server_state in
+		let { server_state; error; log } = state in
+		let { music_state; _ } = server_state in
 		div [
+			(error |> Option.map (fun err ->
+				div ~a:[a_class "error"] [
+					h1 [ text "Error:"];
+					text (Sexp.to_string err)
+				]
+			) |> Option.default empty);
 			div [text "Hello!"];
 			(view_music music_state);
-			(state.log |> Option.map (fun log ->
-				div [
-					div [text "log:"];
-					div [text log]
-				]
-			)) |> Option.default empty;
+			(if show_debug then (
+				(log |> Option.map (fun log ->
+					div [
+						div [text "log:"];
+						div [text log]
+					]
+				)) |> Option.default empty
+			) else empty);
 		]
 
 

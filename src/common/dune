@@ -1,0 +1,11 @@
+; vim: set syntax=lisp commentstring=;\ %s:
+(library
+	(name remo_common)
+	(libraries
+		logs
+		rresult
+		sexplib
+		ppx_sexp_conv
+	)
+	(preprocess (pps lwt.ppx ppx_sexp_conv ppx_fields_conv))
+)

@@ -118,7 +118,7 @@ let load config =
 		) job_map [] in
 		{
 			server_config = config;
-			server_music_state = Server_music.empty;
+			server_music_state = Server_music.init ();
 			server_jobs;
 		}
 	)
@@ -136,7 +136,14 @@ let running_client_job job =
 
 let client_state state =
 	State.({
-		music_state = state.server_music_state;
+		music_state = state.server_music_state.music_state;
 		job_state = {jobs = state.server_jobs |> List.map running_client_job };
 	})
 
+
+let invoke state =
+	let open Event in
+	function
+	| Music_command cmd ->
+		Server_music.invoke state.server_music_state cmd
+	| Job_command _cmd -> failwith "TODO"

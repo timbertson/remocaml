@@ -18,10 +18,10 @@ let conn_closed closed =
 	let final_cons = !conns |> List.length in
 	Log.info(fun m->m"open conns is %d (was %d)" final_cons initial_cons)
 
-let add_event_stream conn initial_state =
+let add_event_stream conn initial_events =
 	let (stream, push) = Lwt_stream.create () in
 	conns := (conn, push) :: !conns;
-	push (Some (Ok initial_state));
+	initial_events |> List.iter (fun event -> push (Some event));
 	stream
 
 let broadcast event =

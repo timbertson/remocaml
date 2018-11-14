@@ -1,8 +1,4 @@
 open Vdoml
-open Lwt
-open Js
-open Dom_html
-open React
 open Remo_common
 module R = Rresult_ext
 (* module Log = (val Logs.log_module "main") *)
@@ -10,10 +6,8 @@ module Log = (val (Logs.src_log (Logs.Src.create "main")))
 open Pervasives
 
 open Sexplib
-open Sexplib.Std
-open Fieldslib
 
-let component tasks =
+let component ~show_debug tasks =
 	Ui.Tasks.sync tasks (fun instance ->
 		let event_source = new%js EventSource.eventSource (Js.string "/events") in
 		event_source##.onmessage := Dom.handler (fun event ->
@@ -30,7 +24,12 @@ let component tasks =
 		)
 	);
 	let initial_state = Ui_state.init () in
-	Ui.root_component ~eq:Ui_state.eq ~update:Ui_state.update ~view:View.view initial_state
+	Ui.root_component
+		~eq:Ui_state.eq
+		~update:Ui_state.update
+		~command:Ui_state.command
+		~view:(View.view ~show_debug)
+		initial_state
 
 let () = (
 	Logs.set_reporter (Logs_browser.console_reporter ());
@@ -57,7 +56,7 @@ let () = (
 	vdoml_level |> Option.default app_level |> Ui.set_log_level;
 	let tasks = Ui.Tasks.init () in
 	Lwt.async (fun () ->
-		Ui.main ~tasks ~root:"main" (component tasks) ()
+		Ui.main ~tasks ~root:"main" (component ~show_debug tasks) ()
 	)
 )
 

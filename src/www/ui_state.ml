@@ -5,6 +5,8 @@ open Sexplib
 open Sexplib.Std
 open Fieldslib
 
+module Log = (val (Logs.src_log (Logs.Src.create "ui_state")))
+
 type t = {
 	server_state: State.state;
 	error: Sexp.t option;
@@ -40,4 +42,39 @@ let update state : event -> t = function
 	| Invoke _ -> state
 
 let update state event = { (update state event) with log = Some (Sexp.to_string (sexp_of_event event)) }
+
+let command instance = fun _state -> function
+	| Server_event _ -> None
+	| Invoke command -> Some (
+			let payload = (Sexp.to_string (Event.sexp_of_command command)) in
+			Log.info (fun m->m"invoking command: %s" payload);
+			let open Url in
+			let path = "invoke" in
+			let relative_url url = {
+				hu_host = url.hu_host;
+				hu_port = url.hu_port;
+				hu_path = path_of_path_string path;
+				hu_path_string = path;
+				hu_arguments = [];
+				hu_fragment = "";
+			} in
+			let dest = match Url.Current.get () with
+				| Some (Http u) -> Http (relative_url u)
+				| Some (Https u) -> Https (relative_url u)
+				| _ -> failwith "invalid URL"
+			in
+			let%lwt response = Lwt_xmlHttpRequest.perform
+				~contents:(`String payload)
+				dest
+			in
+			Lwt.return (match response.code with
+				| 200 -> ()
+				| _ ->
+						let error = try
+							Sexp.of_string response.content
+						with _ -> Sexp.Atom response.content
+						in
+						Vdoml.Ui.emit instance (Server_event (Error error))
+			)
+	)
 

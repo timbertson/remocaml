@@ -1,17 +1,15 @@
 open Remo_common
 open Astring
-open Sexplib.Std
-open Sexplib.Std
+open Sexplib.Conv
+module R = Rresult_ext
 
 type player = {
 	props: OBus_proxy.t;
 	music: OBus_proxy.t;
 }
 
-type volume = OBus_proxy.t
-
 type peers = {
-	volume: volume option;
+	volume: OBus_proxy.t option;
 	player: player option;
 }
 
@@ -34,32 +32,35 @@ let first_mpris_service bus : OBus_peer.t option Lwt.t =
 	) |> Option.default Lwt.return_none
 
 let music_iface peer =
-	OBus_bus.get_proxy peer "org.mpris.MediaPlayer2.Player"
+	OBus_proxy.make ~peer ~path:(OBus_path.of_string "org.mpris.MediaPlayer2.Player")
 
 let props_iface peer =
-	OBus_bus.get_proxy peer "org.freedesktop.DBus.Properties"
+	OBus_proxy.make ~peer ~path:(OBus_path.of_string "org.freedesktop.DBus.Properties")
+
+let disconnected = {
+	volume = None;
+	player = None;
+}
 
 let init () = {
-	peers = {
-		volume = None;
-		player = None;
-	};
+	peers = disconnected;
 	music_state = Music.init ();
 }
 
-let state = ref (init ())
-
+(* let state = ref (init ()) *)
+(*  *)
 (* let play = Rhythmbox_client.Org_mpris_MediaPlayer2_Player.play *)
 (* let previous = Rhythmbox_client.Org_mpris_MediaPlayer2_Player.previous *)
 (* let next = Rhythmbox_client.Org_mpris_MediaPlayer2_Player.next *)
 
-let perform state =
+let invoke state =
 	let open Rhythmbox_client.Org_mpris_MediaPlayer2_Player in
 	let open Music in
 	let music fn =
-		!state.player
-			|> Option.map (fun player -> fn player.music)
-			|> Option.default Lwt.return_unit
+		state.peers.player
+			|> Option.map (fun player ->
+					R.wrap_lwt fn player.music)
+			|> Option.default_fn (fun () -> Lwt.return (Ok ()))
 	in
 	function
 	| Previous -> music previous
@@ -70,13 +71,15 @@ let perform state =
 let connect () =
 	let%lwt bus = OBus_bus.session () in
 	let%lwt player_peer = first_mpris_service bus in
-	let%lwt music_proxy = OBus_bus.get_proxy bus "org.mpris.MediaPlayer2.rhythmbox" (OBus_path.of_string "org.mpris.MediaPlayer2") in
-	let%lwt props_proxy = OBus_bus.get_proxy bus "org.mpris.MediaPlayer2.rhythmbox" (OBus_path.of_string "org.freedesktop.DBus.Properties") in
-	Lwt.return {
-		volume = None;
-		player = Some {
+	let player = player_peer |> Option.map (fun player_peer ->
+		let music_proxy = music_iface player_peer in
+		let props_proxy = props_iface player_peer in
+		{
 			music = music_proxy;
 			props = props_proxy;
-		};
+		}
+	) in
+	Lwt.return {
+		volume = None;
+		player;
 	}
-
