@@ -4,14 +4,9 @@ open Sexplib.Conv
 module R = Rresult_ext
 module Log = (val (Logs.src_log (Logs.Src.create "server_music")))
 
-type player = {
-	props: OBus_proxy.t;
-	music: OBus_proxy.t;
-}
-
 type peers = {
 	volume: OBus_proxy.t option;
-	player: player option;
+	player: OBus_proxy.t option;
 }
 
 type state = {
@@ -42,11 +37,6 @@ let first_mpris_service bus : OBus_peer.t option Lwt.t =
 let music_iface peer =
 	OBus_proxy.make ~peer ~path:(OBus_path.of_string "/org/mpris/MediaPlayer2")
 
-let props_iface peer =
-	(* TODO: unnecessary *)
-	OBus_proxy.make ~peer ~path:(OBus_path.of_string "/org/mpris/MediaPlayer2")
-	(* OBus_proxy.make ~peer ~path:(OBus_path.of_string "org.freedesktop.DBus.Properties") *)
-
 let disconnected = {
 	volume = None;
 	player = None;
@@ -63,7 +53,7 @@ let invoke state =
 	let music fn =
 		state.peers.player
 			|> Option.map (fun player ->
-					R.wrap_lwt fn player.music)
+					R.wrap_lwt fn player)
 			|> Option.default_fn (fun () -> Lwt.return (Ok ()))
 	in
 	function
@@ -75,14 +65,7 @@ let invoke state =
 let connect () =
 	let%lwt bus = OBus_bus.session () in
 	let%lwt player_peer = first_mpris_service bus in
-	let player = player_peer |> Option.map (fun player_peer ->
-		let music_proxy = music_iface player_peer in
-		let props_proxy = props_iface player_peer in
-		{
-			music = music_proxy;
-			props = props_proxy;
-		}
-	) in
+	let player = player_peer |> Option.map music_iface in
 	Lwt.return {
 		volume = None;
 		player;

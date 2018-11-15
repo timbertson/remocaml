@@ -21,6 +21,21 @@ let static_root = "_build/default/src/www"
 
 type 'a http_result = ('a, (Code.status_code * Sexp.t)) result
 
+let reconnect state =
+	let current_state: Server_state.state = !state in
+	let%lwt music_peers = R.wrap_lwt Server_music.connect () in
+	let (peers, error_events) = (match music_peers with
+		| Ok peers -> (peers, [])
+		| Error err -> (Server_music.disconnected, [Error err])
+	) in
+	state := { current_state with
+		server_music_state = { current_state.Server_state.server_music_state with
+			peers;
+		}
+	};
+	(* TODO: trigger a refresh of music state *)
+	Lwt.return error_events
+
 let handler ~state ~static_cache = fun conn req body ->
 	let uri = req |> Request.uri in
 	let path = Uri.path uri in
@@ -54,25 +69,13 @@ let handler ~state ~static_cache = fun conn req body ->
 
 		| (`GET, "events") ->
 			(* reconnect music peers on every connection. It's not that expensive,
-			 * and the mrpis peer may have changed *)
-			let current_state: Server_state.state = !state in
-			let%lwt music_peers = R.wrap_lwt Server_music.connect () in
-			let (peers, error_events) = (match music_peers with
-				| Ok peers -> (peers, [])
-				| Error err -> (Server_music.disconnected, [Error err])
-			) in
-			state := { current_state with
-				server_music_state = { current_state.Server_state.server_music_state with
-					peers;
-				}
-			};
-
-			(* TODO: trigger a refresh of music state *)
+			 * and the mpris peer may have changed *)
+			let%lwt reconnect_events = reconnect state in
 			let client_state = !state |> Server_state.client_state in
 			let initialize_state = [
 				Ok (Event.(Reset_state client_state))
 			] in
-			let events = Connections.add_event_stream conn (error_events @ initialize_state) in
+			let events = Connections.add_event_stream conn (reconnect_events @ initialize_state) in
 			let response = events |> Lwt_stream.map (fun event ->
 				event |> R.map Event.sexp_of_event
 				|> R.sexp_of_result
@@ -84,6 +87,7 @@ let handler ~state ~static_cache = fun conn req body ->
 				"Content-Type", "text/event-stream";
 			] in
 			Server.respond ~headers ~flush:true ~status:`OK ~body:(Body.of_stream response) ()
+
 		| (`POST, "invoke") -> (
 			let%lwt command = body |> Cohttp_lwt.Body.to_string in
 			let command = command |> R.wrap (Event.command_of_sexp % Sexp.of_string) in
@@ -94,7 +98,10 @@ let handler ~state ~static_cache = fun conn req body ->
 				| Ok () -> (`OK, "")
 				| Error err -> (`Internal_server_error, Sexp.to_string (R.sexp_of_error err))
 			in
-			Server.respond_string ~status ~body ()
+			let headers = Header.add_list (Header.init ()) [
+				"Content-Type", "text/plain";
+			] in
+			Server.respond_string ~headers ~status ~body ()
 		)
 
 		| _ -> unknown ()
@@ -143,9 +150,14 @@ let () =
 	(* 	StringMap.add path (read_entire_file (Filename.concat static_root path)) map *)
 	(* ) static_files static_cache in *)
 
-	let callback = handler ~static_cache ~state:(ref server_state) in
+	let state = ref server_state in
+	let callback = handler ~static_cache ~state in
 	let server = Server.create
 		~mode:(`TCP (`Port 8000))
 		~on_exn:(fun _ -> Log.warn (fun m->m"Error in server; ignoring"))
 		(Server.make ~callback ()) in
-	ignore (Lwt_main.run server)
+	Lwt.async (fun () ->
+		let%lwt (_:_ list) = reconnect state in
+		Lwt.return_unit);
+	let () = (Lwt_main.run server) in
+	()
