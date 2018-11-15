@@ -1,0 +1,5 @@
+To get pulseaudio introspection, it doesn't have a bus (it's just a direct connection), so you can't browse with d-feet:
+
+$ dbus-send --address=unix:path=/run/user/1000/pulse/dbus-socket --print-reply --type=method_call /org/pulseaudio/core1 org.freedesktop.DBus.Introspectable.Introspect
+$ dbus-send --address=unix:path=/run/user/1000/pulse/dbus-socket --print-reply --type=method_call /org/pulseaudio/core1 org.freedesktop.DBus.Properties.GetAll
+$ dbus-send --address=unix:path=/run/user/1000/pulse/dbus-socket --print-reply --type=method_call /org/pulseaudio/core1/source1 org.freedesktop.DBus.Introspectable.Introspect

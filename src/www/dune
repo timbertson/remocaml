@@ -21,7 +21,10 @@
 
 (rule
 	(targets style.css)
-	(deps style.scss)
+	(deps style.scss
+		(glob_files scss/*)
+		(glob_files webfonts/*)
+	)
 	(action (run sassc style.scss %{targets}))
 )
 

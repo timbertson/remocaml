@@ -24,7 +24,7 @@ let first_mpris_service bus : OBus_peer.t option Lwt.t =
 		let formatted = List.map (fun x -> " - " ^ x) (List.sort compare all) in
 		String.concat ~sep:"\n" formatted
 	in
-	Log.debug (fun m -> m"All dbus names:\n%s" (dump_names all));
+	(* Log.debug (fun m -> m"All dbus names:\n%s" (dump_names all)); *)
 	let mpris_names = all |> List.filter (fun name ->
 		String.is_prefix ~affix:mpris_prefix name
 	) in
@@ -52,8 +52,33 @@ let invoke state =
 	let open Music in
 	let music fn =
 		state.peers.player
-			|> Option.map (fun player ->
-					R.wrap_lwt fn player)
+			|> Option.map (fun player -> R.wrap_lwt fn player)
+			|> Option.default_fn (fun () -> Lwt.return (Ok ()))
+	in
+	let volume direction =
+		let max = 0xFFFFFFFF in
+		let volumeIncrement = max / 20 in
+		state.peers.volume
+			|> Option.map (fun player : (unit, Sexplib.Sexp.t) result Lwt.t ->
+				let open Pulseaudio_client.Org_PulseAudio_Core1_Device in
+				R.wrap_lwt (fun player : unit Lwt.t ->
+					let%lwt vol = volume player |> OBus_property.get in
+					let updated = vol |> List.map (fun v ->
+						if (direction > 0) && (v >= max - volumeIncrement) then
+							max
+						else if (direction < 0) && (v <= volumeIncrement) then
+							0
+						else
+							v + (direction * volumeIncrement)
+					) in
+					Log.info (fun m->m"volume %d -> %d"
+						(List.hd vol) (List.hd updated));
+
+					(* disabled to prevent speaker breakage... *)
+					Lwt.return_unit
+					(* OBus_property.set (volume player) updated *)
+				) player
+			)
 			|> Option.default_fn (fun () -> Lwt.return (Ok ()))
 	in
 	function
@@ -61,12 +86,30 @@ let invoke state =
 	| Play -> music play
 	| Pause -> music pause
 	| Next -> music next
+	| Louder -> volume 1
+	| Quieter -> volume (-1)
+
+let discover_volume_device session_bus : OBus_proxy.t Lwt.t =
+	let%lwt (address:string) = (
+		let%lwt peer = OBus_bus.get_peer session_bus "org.PulseAudio1" in
+		let proxy = OBus_proxy.make ~peer ~path:(OBus_path.of_string "/org/pulseaudio/server_lookup1") in
+		Pulseaudio_client.Org_PulseAudio_ServerLookup1.address proxy |> OBus_property.get
+	)
+	in
+
+	(* now connect to the server directly *)
+	let%lwt conn = OBus_connection.of_addresses ~shared:true (OBus_address.of_string address) in
+	let pa_peer = OBus_peer.make ~connection:conn ~name:("org.PulseAudio.Core1") in
+	let pa_proxy = OBus_proxy.make ~peer:pa_peer ~path:(OBus_path.of_string "/org/pulseaudio/core1") in
+	Pulseaudio_client.Org_PulseAudio_Core1.fallback_sink pa_proxy |> OBus_property.get
 
 let connect () =
 	let%lwt bus = OBus_bus.session () in
+	(* TODO: parallel *)
 	let%lwt player_peer = first_mpris_service bus in
+	let%lwt volume = discover_volume_device bus in
 	let player = player_peer |> Option.map music_iface in
 	Lwt.return {
-		volume = None;
+		volume = Some volume;
 		player;
 	}

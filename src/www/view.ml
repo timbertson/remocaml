@@ -6,21 +6,36 @@ open Sexplib
 
 let view_music _instance =
 	let open Music in
-	(* let volumeIncrement = 1.0 /. 20.0 in *)
 	let controls = [
-		Previous, "step-backward";
+		Previous, "backward";
 		Play, "play";
 		Pause, "pause";
-		Next, "step-forward";
+		Next, "forward";
+	] in
+
+	let volume_controls = [
+		Quieter, "minus";
+		Louder, "plus";
 	] in
 
 	let open Remo_common.Event in
 	fun _state ->
-		div (controls |> List.map (fun (cmd, icon) ->
-			span ~a:[a_class ("btn " ^ icon); a_onclick (emitter (Invoke (Music_command cmd)))] [
-				text icon (* tmp *)
-			]
-		))
+		let music_controls = div (controls |> List.map (fun (cmd, icon) ->
+			span ~a:[
+				a_class ("music-button music-" ^ icon);
+				a_onclick (emitter (Invoke (Music_command cmd)))
+			] []
+		)) in
+		let volume_controls = div (volume_controls |> List.map (fun (cmd, icon) ->
+			span ~a:[
+				a_class ("music-button music-" ^ icon);
+				a_onclick (emitter (Invoke (Music_command cmd)));
+			] []
+		)) in
+		div [
+			music_controls;
+			volume_controls;
+		]
 
 let view_job _instance = fun _state ->
 	empty
@@ -41,7 +56,6 @@ let view ~show_debug instance =
 					text (Sexp.to_string err)
 				]
 			) |> Option.default empty);
-			div [text "Hello!"];
 			(view_music music_state);
 			(if show_debug then (
 				(log |> Option.map (fun log ->

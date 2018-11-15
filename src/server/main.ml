@@ -1,9 +1,9 @@
-(* open Lwt *)
 open Cohttp
 open Cohttp_lwt
 open Cohttp_lwt_unix
 open Sexplib
 open Remo_common
+open Astring
 open Util
 module R = Rresult_ext
 module Log = (val (Logs.src_log (Logs.Src.create "main")))
@@ -62,10 +62,12 @@ let handler ~state ~static_cache = fun conn req body ->
 				Server.respond_file ~fname:(Filename.concat static_root path) ()
 	in
 
-	let path_without_slash =  String.sub path 1 ((String.length path) - 1) in
+	let path_without_slash =  String.trim ~drop:(fun x -> x = '/') path in
 	let response = match (meth, path_without_slash) with
 		| (`GET, "") -> serve_static "index.html"
 		| (`GET, path) when StringSet.mem path static_files -> serve_static path
+
+		| (`GET, path) when String.is_prefix ~affix:"webfonts/" path -> serve_static path
 
 		| (`GET, "events") ->
 			(* reconnect music peers on every connection. It's not that expensive,
@@ -137,11 +139,37 @@ let read_entire_file path =
 		raise e
 	)
 
-let () =
+let init_logs () =
 	Logs.set_level (
 		try (Unix.getenv "LOG_LEVEL" |> Logs.level_of_string |> R.get_ok) with _ -> Some (Logs.Info)
 	);
-	Logs.set_reporter (Logs_fmt.reporter ());
+	(* Quiet, cohttp *)
+	Logs.Src.list () |> List.iter (fun src ->
+		if String.is_prefix ~affix:"cohttp." (Logs.Src.name src) then
+			Logs.Src.set_level src (Some Info)
+	);
+	let tagging_reporter parent =
+		{ Logs.report = (fun src level ~over k user_msgf ->
+			if (Logs.Src.equal src Logs.default || level = Logs.App) then
+				parent.Logs.report src level ~over k user_msgf
+			else
+				parent.Logs.report src level ~over k (fun outer_msgf ->
+					user_msgf (fun ?header ?tags fmt ->
+						outer_msgf ?header ?tags ("[%a %s] @[" ^^ fmt ^^ "@]")
+							Logs.pp_level level
+							(Logs.Src.name src)
+					)
+			)
+		)}
+	in
+	let default_reporter =
+		let pp_header _ _ = () in
+		Logs.format_reporter ~pp_header ()
+	in
+	Logs.set_reporter (tagging_reporter default_reporter)
+
+let () =
+	init_logs ();
 	let config = Server_config.load ~state_dir:("/tmp/remocaml") "config/remocaml.sexp" |> R.force in
 	let server_state = Server_state.load config |> R.force in
 	Log.debug(fun m->m"server state: %s" (Server_state.sexp_of_state server_state |> Sexp.to_string));

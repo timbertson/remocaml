@@ -1,3 +1,8 @@
+$fa-font-path:"webfonts";
+@import "scss/fontawesome.scss";
+@import "scss/solid.scss";
+
+
 body {
 	text-align:center; background: rgb(167, 167, 167);
 }
@@ -7,6 +12,8 @@ pre {
 }
 
 .music-button {
+	@extend %fa-icon;
+	@extend .fas;
 	font-size:1.8em;
 	border-radius:10em;
 	background: rgb(87, 131, 197);
@@ -21,6 +28,13 @@ pre {
 	margin-top: 10px;
 	margin-bottom: 5px;
 }
+
+.music-play:before { content: fa-content($fa-var-play); }
+.music-pause:before { content: fa-content($fa-var-pause); }
+.music-forward:before { content: fa-content($fa-var-forward); }
+.music-backward:before { content: fa-content($fa-var-backward); }
+.music-minus:before { content: fa-content($fa-var-volume-down); }
+.music-plus:before { content: fa-content($fa-var-volume-up); }
 
 .music-button:active {
 	background-color: rgb(127, 180, 236);

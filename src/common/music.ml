@@ -9,6 +9,8 @@ type command =
 	| Play
 	| Pause
 	| Next
+	| Louder
+	| Quieter
 	[@@deriving sexp]
 
 type event =
