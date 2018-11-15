@@ -12,7 +12,7 @@
 		cohttp-lwt-unix
 		obus
 	)
-	(preprocess (pps ppx_sexp_conv ppx_fields_conv lwt.ppx))
+	(preprocess (pps ppx_sexp_conv ppx_fields_conv lwt_ppx))
 )
 
 (alias

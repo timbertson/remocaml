@@ -10,6 +10,7 @@ stdenv.mkDerivation {
 			"cohttp-lwt-unix"
 			"lwt"
 			"lwt_react"
+			"lwt_ppx"
 			"ppx_sexp_conv"
 			"vdoml"
 		] ++ extraDeps);
@@ -26,13 +27,13 @@ stdenv.mkDerivation {
 				# 		'' + o.buildPhase;
 				# 	});
 				# };
-				num = super.opamPackages.num // {
-					"1.1" = super.opamPackages.num."1.1".overrideAttrs (o: {
-						# Note: needs at least git commit 7dd5e935aaa2b902585b3b2d0e55ad9b2442fff0
-						# for findlib-install target
-						src = (pkgs.nix-update-source.fetch ./num.json).src;
-					});
-				};
+				# num = super.opamPackages.num // {
+				# 	"1.1" = super.opamPackages.num."1.1".overrideAttrs (o: {
+				# 		# Note: needs at least git commit 7dd5e935aaa2b902585b3b2d0e55ad9b2442fff0
+				# 		# for findlib-install target
+				# 		src = (pkgs.nix-update-source.fetch ./num.json).src;
+				# 	});
+				# };
 			};
 		};
 	} ++ [pkgs.sassc];

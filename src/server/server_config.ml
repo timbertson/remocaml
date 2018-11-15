@@ -46,7 +46,9 @@ let load ~state_dir path =
 	let load_file () =
 		try
 			Sexp.load_sexps path
-		with Unix.Unix_error (Unix.ENOENT, _, _) -> []
+		with
+			| Unix.Unix_error (Unix.ENOENT, _, _)
+			| Sys_error _ -> []
 	in
 	R.bind (R.catch_exn load_file) (fun config ->
 		let initial_config = {
