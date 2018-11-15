@@ -119,22 +119,23 @@ let read_entire_file path =
 	(* TODO: surely there's a builtin? *)
 	let open Unix in
 	let f = openfile path [O_RDONLY; O_CLOEXEC] 0o600 in
-	let buf = Bytes.empty in
+	let stats = fstat f in
+	let buf = Bytes.make stats.st_size '\x00' in
 	let rec read_chunk = fun offset ->
-		Log.debug(fun m->m"reading upto 1024 bytes into offset %d in %s (fd %d)"
-			offset path (Obj.magic f));
-		let bytes_read = read f buf offset 1024 in
-		Log.debug(fun m->m"read %d bytes into offset %d in %s"
-			bytes_read offset path);
-		if bytes_read > 0 then read_chunk (offset + bytes_read)
+		let bytes_left = stats.st_size - offset in
+		if (bytes_left > 0) then (
+			let bytes_read = read f buf offset bytes_left in
+			assert (bytes_read > 0);
+			read_chunk (offset + bytes_read)
+		)
 	in
-	let () = try
+	try
 		read_chunk 0;
+		Bytes.to_string buf
 	with e -> (
 		Log.err(fun m->m"Failed to read file %s" path);
 		raise e
-	) in
-	Bytes.to_string buf
+	)
 
 let () =
 	Logs.set_level (
@@ -146,9 +147,9 @@ let () =
 	Log.debug(fun m->m"server state: %s" (Server_state.sexp_of_state server_state |> Sexp.to_string));
 	let static_cache = StringMap.empty in
 	(* Invalid_argument !?!?!? *)
-	(* let static_cache = StringSet.fold (fun path map -> *)
-	(* 	StringMap.add path (read_entire_file (Filename.concat static_root path)) map *)
-	(* ) static_files static_cache in *)
+	let static_cache = StringSet.fold (fun path map ->
+		StringMap.add path (read_entire_file (Filename.concat static_root path)) map
+	) static_files static_cache in
 
 	let state = ref server_state in
 	let callback = handler ~static_cache ~state in
