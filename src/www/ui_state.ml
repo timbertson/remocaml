@@ -11,12 +11,14 @@ type t = {
 	server_state: State.state;
 	error: Sexp.t option;
 	log: string option;
+	state_override: State.state option; (* used for testing *)
 } [@@deriving sexp, fields]
 
-let init () = {
+let init ~fake () = {
 	server_state = State.init ();
 	error = None;
 	log = None;
+	state_override = if fake then Some (State.fake ()) else None;
 }
 
 let eq : t -> t -> bool = fun a b ->
@@ -25,6 +27,7 @@ let eq : t -> t -> bool = fun a b ->
 	in
 	Fields.for_all
 		~server_state:(use (=))
+		~state_override:(use (=))
 		~error:(use (=))
 		~log:(use (=))
 

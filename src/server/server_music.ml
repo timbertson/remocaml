@@ -56,23 +56,31 @@ let invoke state =
 			|> Option.default_fn (fun () -> Lwt.return (Ok ()))
 	in
 	let volume direction =
-		let max = 0xFFFFFFFF in
-		let volumeIncrement = max / 20 in
 		state.peers.volume
 			|> Option.map (fun player : (unit, Sexplib.Sexp.t) result Lwt.t ->
-				let open Pulseaudio_client.Org_PulseAudio_Core1_Device in
 				R.wrap_lwt (fun player : unit Lwt.t ->
+					let open Pulseaudio_client.Org_PulseAudio_Core1_Device in
+					(* TODO: parallel *)
+					let%lwt max = volume_steps player |> OBus_property.get in
 					let%lwt vol = volume player |> OBus_property.get in
-					let updated = vol |> List.map (fun v ->
-						if (direction > 0) && (v >= max - volumeIncrement) then
+					let increment = max / 20 in
+					let updated = vol |> List.map (fun vol ->
+						if (direction > 0) && (vol >= max - increment) then
 							max
-						else if (direction < 0) && (v <= volumeIncrement) then
+						else if (direction < 0) && (vol <= increment) then
 							0
 						else
-							v + (direction * volumeIncrement)
+							vol + (direction * increment)
 					) in
-					Log.info (fun m->m"volume %d -> %d"
-						(List.hd vol) (List.hd updated));
+					Log.info (fun m->
+						let max = float_of_int max in
+						let volume_float d =
+							let first = List.nth_opt d 0 |> Option.default 0 in
+							max /. (float_of_int first) in
+						m"volume %0.2f -> %0.2f"
+							(volume_float vol)
+							(volume_float updated)
+					);
 
 					(* disabled to prevent speaker breakage... *)
 					Lwt.return_unit

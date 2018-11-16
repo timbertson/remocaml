@@ -7,7 +7,7 @@ open Pervasives
 
 open Sexplib
 
-let component ~show_debug tasks =
+let component ~show_debug ~fake tasks =
 	Ui.Tasks.sync tasks (fun instance ->
 		let event_source = new%js EventSource.eventSource (Js.string "/events") in
 		event_source##.onmessage := Dom.handler (fun event ->
@@ -23,7 +23,7 @@ let component ~show_debug tasks =
 			Js._true
 		)
 	);
-	let initial_state = Ui_state.init () in
+	let initial_state = Ui_state.init ~fake () in
 	Ui.root_component
 		~eq:Ui_state.eq
 		~update:Ui_state.update
@@ -33,30 +33,50 @@ let component ~show_debug tasks =
 
 let () = (
 	Logs.set_reporter (Logs_browser.console_reporter ());
-	let app_level, vdoml_level, show_debug = (
-		let root_url =
-			let open Url in
-			match Url.Current.get () with
-				| Some (Http _ as u)
-				| Some (Https _ as u) -> Url.string_of_url u |> Uri.of_string
-				| None | Some (File _) -> failwith "unsupported protocol"
-		in
+	let root_url =
+		let open Url in
+		match Url.Current.get () with
+			| Some (Http _ as u)
+			| Some (Https _ as u) -> Url.string_of_url u |> Uri.of_string
+			| None | Some (File _) -> failwith "unsupported protocol"
+	in
+	let fragments = Uri.fragment root_url |> Option.default "" |> String.split_on_char ',' in
 
-		let open Logs in
-		match Uri.fragment root_url with
-		| Some "trace" -> (Debug, Some Debug, true)
-		| Some "debug" -> (Debug, Some Info, true)
-		| Some "info" -> (Info, None, false)
-		| _ -> (match Uri.host root_url with
-			| Some "localhost" -> (Info, None, false)
-			| _ -> (Warning, None, false)
-		)
-	) in
-	Logs.set_level ~all:true (Some app_level);
-	vdoml_level |> Option.default app_level |> Ui.set_log_level;
+	let open Logs in
+	let app_level = ref Warning in
+	let vdoml_level = ref None in
+	let show_debug = ref false in
+	let fake_data = ref false in
+
+	let () = match Uri.host root_url with
+		| Some "localhost" -> app_level := Info
+		| _ -> ()
+	in
+
+	let () = fragments |> List.iter (function
+		| "trace" ->
+			app_level := Debug;
+			vdoml_level := Some Debug;
+			show_debug := true
+		| "debug" ->
+			app_level := Debug;
+			vdoml_level := Some Info;
+			show_debug := true
+		| "info" ->
+			app_level := Debug;
+			vdoml_level := Some Info;
+			show_debug := true
+		| "fake" ->
+			fake_data := true
+		| _ -> ()
+	)
+	in
+
+	Logs.set_level ~all:true (Some !app_level);
+	!vdoml_level |> Option.default !app_level |> Ui.set_log_level;
 	let tasks = Ui.Tasks.init () in
 	Lwt.async (fun () ->
-		Ui.main ~tasks ~root:"main" (component ~show_debug tasks) ()
+		Ui.main ~tasks ~root:"main" (component ~show_debug:!show_debug ~fake:!fake_data tasks) ()
 	)
 )
 

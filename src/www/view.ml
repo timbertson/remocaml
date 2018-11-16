@@ -47,7 +47,8 @@ let view ~show_debug instance =
 	let view_music = view_music instance in
 	function state ->
 		let open State in
-		let { server_state; error; log } = state in
+		let { server_state; state_override; error; log } = state in
+		let server_state = state_override |> Option.default server_state in
 		let { music_state; _ } = server_state in
 		div [
 			(error |> Option.map (fun err ->

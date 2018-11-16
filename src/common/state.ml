@@ -10,3 +10,8 @@ let init () = {
 	job_state = Job.init ();
 }
 
+let fake () = let base = init () in { base with
+	music_state = {
+		volume = Some 0.75;
+	}
+}
