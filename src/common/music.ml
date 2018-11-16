@@ -1,7 +1,13 @@
 open Sexplib.Std
 
+type track = {
+	artist: string;
+	title: string;
+} [@@deriving sexp]
+
 type state = {
 	volume: float option;
+	track: track option;
 } [@@deriving sexp]
 
 type command =
@@ -18,5 +24,6 @@ type event =
 	[@@deriving sexp]
 
 let init () = {
-	volume = None
+	volume = None;
+	track = None;
 }

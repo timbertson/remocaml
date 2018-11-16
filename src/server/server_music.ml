@@ -1,6 +1,7 @@
 open Remo_common
 open Astring
 open Sexplib.Conv
+module Lwt = Lwt_ext
 module R = Rresult_ext
 module Log = (val (Logs.src_log (Logs.Src.create "server_music")))
 
@@ -61,8 +62,10 @@ let invoke state =
 				R.wrap_lwt (fun player : unit Lwt.t ->
 					let open Pulseaudio_client.Org_PulseAudio_Core1_Device in
 					(* TODO: parallel *)
-					let%lwt max = volume_steps player |> OBus_property.get in
-					let%lwt vol = volume player |> OBus_property.get in
+					let%lwt (max, vol) = Lwt.zip
+						(volume_steps player |> OBus_property.get)
+						(volume player |> OBus_property.get)
+					in
 					let increment = max / 20 in
 					let updated = vol |> List.map (fun vol ->
 						if (direction > 0) && (vol >= max - increment) then

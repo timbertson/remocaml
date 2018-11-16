@@ -19,7 +19,13 @@ let view_music _instance =
 	] in
 
 	let open Remo_common.Event in
-	fun _state ->
+	fun state ->
+		let track_display = state.track |> Option.map (fun { artist; title } ->
+			div [
+				div [ text title ];
+				div [ text artist ];
+			]
+		) |> Option.default empty in
 		let music_controls = div (controls |> List.map (fun (cmd, icon) ->
 			span ~a:[
 				a_class ("music-button music-" ^ icon);
@@ -35,6 +41,7 @@ let view_music _instance =
 		div [
 			music_controls;
 			volume_controls;
+			track_display;
 		]
 
 let view_job _instance = fun _state ->
