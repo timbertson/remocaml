@@ -1,0 +1,16 @@
+opam-version: "2.0"
+authors: [ "tim@gfxmonk.net" ]
+homepage: "https://github.com/timbertson/vdoml"
+maintainer: "tim@gfxmonk.net"
+depends: [
+  "dune"
+  "obus"
+  "cohttp-lwt"
+  "cohttp-lwt-unix"
+  "lwt"
+  "lwt_react"
+  "lwt_ppx"
+  "ppx_sexp_conv"
+  "vdoml"
+]
+build: [ "dune" "build" "-p" "remocaml" ]

@@ -28,6 +28,24 @@
 	(action (run sassc style.scss %{targets}))
 )
 
+(install
+	(section share)
+	(files
+		main.bc.js
+		bootstrap.min.css
+	)
+)
+
+; see https://github.com/ocaml/dune/issues/256#issuecomment-361242074
+; (rule
+; 	(targets res-install.dune)
+; 	(deps (universe))
+; 	(action (run ./res-install.dune.gup %{targets} %{targets}))
+; 	(mode promote)
+; )
+; (include res-install.dune)
+
+
 (alias
 	(name all)
 	(deps

@@ -1,0 +1,16 @@
+{
+  "fetch": {
+    "args": {
+      "owner": "timbertson",
+      "repo": "remocaml",
+      "rev": "ae125adacb07e836f34754655151aeeb2072b778",
+      "sha256": "0l36q1v6gl1g904p0wjks9mhy35jqxslb4if2xydrdcl3visgd1d"
+    },
+    "fn": "fetchFromGitHub",
+    "rev": "ae125adacb07e836f34754655151aeeb2072b778"
+  },
+  "owner": "timbertson",
+  "repo": "remocaml",
+  "rev": "ae125adacb07e836f34754655151aeeb2072b778",
+  "type": "fetchFromGitHub"
+}

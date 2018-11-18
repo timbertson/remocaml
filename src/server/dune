@@ -1,7 +1,7 @@
 ; vim: set syntax=lisp commentstring=;\ %s:
 (executable
 	(name main)
-	; (public_name remocaml)
+	(public_name remocaml)
 	(libraries
 		remo_common
 		astring

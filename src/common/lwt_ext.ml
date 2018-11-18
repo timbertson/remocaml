@@ -2,17 +2,14 @@ include Lwt
 open Lwt.Infix
 
 let zip a b =
-	let (t, wake) = wait () in
 	let ar = ref None in
 	let br = ref None in
-	bind (
-		bind a (fun x -> ar := Some x)
+	((
+		map (fun x -> ar := Some x) a
 		<&>
-		bind b (fun x -> br := Some x)
-	) (fun () ->
-		match (ar, ab) with
-			| Some a, Some b -> wake (a,b)
+		map (fun x -> br := Some x) b
+	) |> map (fun () ->
+		match (!ar, !br) with
+			| Some a, Some b -> (a,b)
 			| _ -> failwith "Impossible!"
-	)
-
-
+	))

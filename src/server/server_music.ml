@@ -5,9 +5,16 @@ module Lwt = Lwt_ext
 module R = Rresult_ext
 module Log = (val (Logs.src_log (Logs.Src.create "server_music")))
 
+type dbus_map = (string * OBus_value.V.single) list
+
+type player = {
+	player_proxy: OBus_proxy.t;
+	metadata_signal: dbus_map React.signal Lwt.t;
+}
+
 type peers = {
 	volume: OBus_proxy.t option;
-	player: OBus_proxy.t option;
+	player: player option;
 }
 
 type state = {
@@ -35,8 +42,13 @@ let first_mpris_service bus : OBus_peer.t option Lwt.t =
 		OBus_bus.get_peer bus name |> Lwt.map (fun x -> Some x)
 	) |> Option.default Lwt.return_none
 
-let music_iface peer =
-	OBus_proxy.make ~peer ~path:(OBus_path.of_string "/org/mpris/MediaPlayer2")
+let make_player peer =
+	let open Rhythmbox_client in
+	let proxy = OBus_proxy.make ~peer ~path:(OBus_path.of_string "/org/mpris/MediaPlayer2") in
+	{
+		player_proxy = proxy;
+		metadata_signal = OBus_property.monitor (Org_mpris_MediaPlayer2_Player.metadata proxy);
+	}
 
 let disconnected = {
 	volume = None;
@@ -53,7 +65,7 @@ let invoke state =
 	let open Music in
 	let music fn =
 		state.peers.player
-			|> Option.map (fun player -> R.wrap_lwt fn player)
+			|> Option.map (fun player -> R.wrap_lwt fn player.player_proxy)
 			|> Option.default_fn (fun () -> Lwt.return (Ok ()))
 	in
 	let volume direction =
@@ -61,7 +73,6 @@ let invoke state =
 			|> Option.map (fun player : (unit, Sexplib.Sexp.t) result Lwt.t ->
 				R.wrap_lwt (fun player : unit Lwt.t ->
 					let open Pulseaudio_client.Org_PulseAudio_Core1_Device in
-					(* TODO: parallel *)
 					let%lwt (max, vol) = Lwt.zip
 						(volume_steps player |> OBus_property.get)
 						(volume player |> OBus_property.get)
@@ -79,15 +90,12 @@ let invoke state =
 						let max = float_of_int max in
 						let volume_float d =
 							let first = List.nth_opt d 0 |> Option.default 0 in
-							max /. (float_of_int first) in
+							(float_of_int first) /. max in
 						m"volume %0.2f -> %0.2f"
 							(volume_float vol)
 							(volume_float updated)
 					);
-
-					(* disabled to prevent speaker breakage... *)
-					Lwt.return_unit
-					(* OBus_property.set (volume player) updated *)
+					OBus_property.set (volume player) updated
 				) player
 			)
 			|> Option.default_fn (fun () -> Lwt.return (Ok ()))
@@ -116,10 +124,11 @@ let discover_volume_device session_bus : OBus_proxy.t Lwt.t =
 
 let connect () =
 	let%lwt bus = OBus_bus.session () in
-	(* TODO: parallel *)
-	let%lwt player_peer = first_mpris_service bus in
-	let%lwt volume = discover_volume_device bus in
-	let player = player_peer |> Option.map music_iface in
+	let%lwt (player_peer, volume) = Lwt.zip
+		(first_mpris_service bus)
+		(discover_volume_device bus)
+	in
+	let player = player_peer |> Option.map make_player in
 	Lwt.return {
 		volume = Some volume;
 		player;

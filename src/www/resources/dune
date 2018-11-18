@@ -1,0 +1,21 @@
+(* -*- tuareg -*- *)
+(* vim: syntax=ocaml
+ *)
+(* psuedo-module to dynamically install vaious files from ../ *)
+let () =
+	let root = ".." in
+	let dirs = [
+		"webfonts";
+	] in
+	let file_list = dirs |> List.map (fun dir ->
+		let prefix = Filename.concat root dir in
+		Sys.readdir prefix |> Array.to_list |> List.map (Filename.concat prefix)
+	) |> List.concat in
+	[
+		"(install";
+			"(section share)";
+			"(files";
+			] @ file_list @ [
+			")";
+		")";
+	] |> String.concat "\n" |> Jbuild_plugin.V1.send
