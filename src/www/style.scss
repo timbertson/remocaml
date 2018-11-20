@@ -33,19 +33,22 @@ pre {
 .music-pause:before { content: fa-content($fa-var-pause); }
 .music-forward:before { content: fa-content($fa-var-forward); }
 .music-backward:before { content: fa-content($fa-var-backward); }
-.music-minus:before { content: fa-content($fa-var-volume-down); }
-.music-plus:before { content: fa-content($fa-var-volume-up); }
 
 .music-button:active {
 	background-color: rgb(127, 180, 236);
 }
 
 .volume-color {
-		background: rgb(206, 206, 206);
-		border: 1px solid rgb(167, 167, 167);
+	background: rgb(206, 206, 206);
+	border: 1px solid rgb(167, 167, 167);
 }
 
+.volume-minus:before { content: fa-content($fa-var-volume-down); }
+.volume-plus:before { content: fa-content($fa-var-volume-up); }
+
 .volume-button {
+	@extend %fa-icon;
+	@extend .fas;
 	font-size: 0.7em;
 }
 

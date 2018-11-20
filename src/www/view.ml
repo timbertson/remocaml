@@ -13,11 +13,6 @@ let view_music _instance =
 		Next, "forward";
 	] in
 
-	let volume_controls = [
-		Quieter, "minus";
-		Louder, "plus";
-	] in
-
 	let open Remo_common.Event in
 	fun state ->
 		let track_display = match (state.artist, state.title) with
@@ -34,13 +29,27 @@ let view_music _instance =
 				a_onclick (emitter (Invoke (Music_command cmd)))
 			] []
 		)) in
-		let volume_controls = div (volume_controls |> List.map (fun (cmd, icon) ->
-			span ~a:[
-				a_class ("music-button music-" ^ icon);
+		let volume_controls = (
+			let volume_max_width = 120.0 in (* px *)
+			let volume_bar_style =
+				let open Printf in
+				let volume_width = (state.volume |> Option.default 0.0) *. volume_max_width in
+				sprintf "width: %0.1f;" volume_width
+			in
+			let btn cmd icon = span ~a:[
+				a_class ("volume-button volume-" ^ icon);
 				a_onclick (emitter (Invoke (Music_command cmd)));
 			] []
-		)) in
-		div [
+			in
+			div [
+				btn Quieter "minus";
+				div ~a:[a_class "volume-slider"] [
+					div ~a:[a_style volume_bar_style; a_class "volume-color"] [];
+				];
+				btn Louder "plus";
+			]
+		) in
+		div ~a:[a_class "music-details"] [
 			music_controls;
 			volume_controls;
 			track_display;
@@ -61,7 +70,7 @@ let view ~show_debug instance =
 		let { music_state; _ } = server_state in
 		div [
 			(error |> Option.map (fun err ->
-				div ~a:[a_class "error"] [
+				div ~a:[a_class "alert alert-danger"] [
 					h1 [ text "Error:"];
 					text (Sexp.to_string err)
 				]
