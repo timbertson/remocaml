@@ -35,3 +35,6 @@ type state = {
 let init () = {
 	jobs = [];
 }
+
+let update state = function
+	| Job_running _ -> state

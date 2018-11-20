@@ -10,6 +10,6 @@ type event =
 	[@@deriving sexp]
 
 let update : State.state -> event -> State.state = fun state -> function
-	| Music_event _ -> state
-	| Job_event _ -> state
+	| Music_event e -> { state with music_state = Music.update state.music_state e }
+	| Job_event e -> { state with job_state = Job.update state.job_state e }
 	| Reset_state s -> s

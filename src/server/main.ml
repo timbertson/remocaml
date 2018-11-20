@@ -78,20 +78,16 @@ let handler ~state ~static_cache = fun conn req body ->
 				Ok (Event.(Reset_state client_state))
 			] in
 			let events = Connections.add_event_stream conn (reconnect_events @ initialize_state) in
-			(* let dbus_events = *)
-			(* 	let open Server_music in *)
-			(* 	let open React in *)
-			(* 	(!state).Server_state.server_music_state.peers.player |> Option.map (fun player -> *)
-			(* 		player.metadata_signal |> Lwt.map (fun signal -> *)
-			(* 			signal |> S.map (fun metadata -> *)
-			(* 				Log.info (fun m->m"metadata change!"); *)
-			(* 				() *)
-			(* 			) *)
-			(* 		) *)
-			(* 	) *)
-			(* in *)
-			(* Lwt.async dbus_events; *)
-			let response = events |> Lwt_stream.map (fun event ->
+			let empty_stream () = Lwt_stream.from_direct (fun () -> None) in
+
+			let dbus_events: (Event.event, Sexp.t) result Lwt_stream.t =
+				let open Server_music in
+				(!state).Server_state.server_music_state.peers.player
+					|> Option.map (Server_music.player_events)
+					|> Option.default_fn empty_stream
+			in
+
+			let response = Lwt_stream.choose [dbus_events; events] |> Lwt_stream.map (fun event ->
 				event |> R.map Event.sexp_of_event
 				|> R.sexp_of_result
 				|> fun s ->

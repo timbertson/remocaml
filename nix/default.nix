@@ -1,4 +1,5 @@
-{ pkgs, stdenv, opam2nix, vdoml, extraDeps ? [] }:
+{ pkgs, stdenv, opam2nix, vdoml, extraPackages ? [] }:
+let extraSpecs = opam2nix.toSpecs extraPackages; in
 (opam2nix.buildOpamPackage {
 	name = "remocaml";
 	version = "0.1.0";
@@ -6,6 +7,7 @@
 	extraRepos = [
 		vdoml.opam2nix.repo
 	];
+	specs = extraSpecs;
 	ocamlAttr = "ocaml-ng.ocamlPackages_4_06.ocaml";
 	overrides = { super, self }: {
 		opamPackages = super.opamPackages // {
@@ -25,7 +27,7 @@
 			# };
 		};
 	};
-}).overrideAttrs (o: {
-	buildInputs = o.buildInputs ++ [pkgs.sassc] ++ extraDeps;
+}).overrideAttrs (o: with pkgs.lib; {
+	buildInputs = o.buildInputs ++ [pkgs.sassc] ++ (map (spec: getAttr spec.name o.passthru.opam2nix.packages) extraSpecs);
 })
 

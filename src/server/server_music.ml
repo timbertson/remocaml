@@ -1,15 +1,22 @@
 open Remo_common
 open Astring
+open Sexplib
 open Sexplib.Conv
+open Music
+open List_ext
 module Lwt = Lwt_ext
 module R = Rresult_ext
 module Log = (val (Logs.src_log (Logs.Src.create "server_music")))
 
-type dbus_map = (string * OBus_value.V.single) list
+module DbusMap = struct
+	type t = (string * OBus_value.V.single) list
+	let keys : t -> string list = fun map ->
+		map |> List.map (fun (key,_) -> key)
+end
 
 type player = {
 	player_proxy: OBus_proxy.t;
-	metadata_signal: dbus_map React.signal Lwt.t;
+	metadata_signal: DbusMap.t React.signal Lwt.t;
 }
 
 type peers = {
@@ -25,6 +32,52 @@ type state = {
 
 let mpris_path = "org.mpris.MediaPlayer2"
 let mpris_prefix = mpris_path ^ "."
+
+
+type 'a delayed_stream_mode =
+	| Head of 'a Lwt_stream.t Lwt.t
+	| Tail of 'a Lwt_stream.t
+
+let delayed_stream (stream: 'a Lwt_stream.t Lwt.t) : 'a Lwt_stream.t =
+	let state = ref (Head stream) in
+	let rec next = fun () ->
+		match !state with
+			| Tail stream -> Lwt_stream.get stream
+			| Head stream ->
+				Lwt.bind stream (fun stream ->
+					state := Tail stream;
+					next ()
+				)
+	in
+	Lwt_stream.from next
+
+let player_events player =
+	let open React in
+	let open Event in
+	let get_string key : OBus_value.V.single -> (string, Sexp.t) result = let open OBus_value.V in function
+		| Basic (String v) -> Ok v
+		| _ -> Error (Sexp.Atom ("Unexpected dbus value type for key " ^ key))
+	in
+	let current_artist x = Current_artist (Some x) in
+	let current_title x = Current_title (Some x) in
+	let metadata_change_events map = (
+		Log.debug(fun m->m "Saw changes to metadata keys: %s"
+			(DbusMap.keys map |> String.concat ~sep:","));
+		let music_events = map |> List.filter_map (fun (key, value) ->
+			match key with
+				| "xesam:artist" -> Some (get_string key value |> R.map current_artist)
+				| "xesam:title" -> Some (get_string key value |> R.map current_title)
+				| _ -> None
+		) in
+		music_events |> List.map (fun evt -> evt |> R.map (fun evt -> Music_event evt))
+	) in
+
+	player.metadata_signal |> Lwt.map (fun signal ->
+		signal |> S.changes
+			|> E.map metadata_change_events
+			|> Lwt_react.E.to_stream
+			|> Lwt_stream.flatten
+	) |> delayed_stream
 
 let first_mpris_service bus : OBus_peer.t option Lwt.t =
 	let%lwt all = OBus_bus.list_names bus in
@@ -62,7 +115,6 @@ let init () = {
 
 let invoke state =
 	let open Rhythmbox_client.Org_mpris_MediaPlayer2_Player in
-	let open Music in
 	let music fn =
 		state.peers.player
 			|> Option.map (fun player -> R.wrap_lwt fn player.player_proxy)

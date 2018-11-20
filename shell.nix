@@ -6,7 +6,7 @@ let drv = {
 	opam2nix ? pkgs.callPackage ../../ocaml/opam2nix-packages/nix/release/default.nix { inherit opam2nixBin; }
 }: pkgs.callPackage ./nix {
 	inherit opam2nix;
-	extraDeps = ["utop"];
+	extraPackages = ["utop"];
 };
 in
 (pkgs.nix-pin.api {}).callPackage drv {}

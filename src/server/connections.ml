@@ -2,6 +2,9 @@ open Sexplib
 open Remo_common
 module Log = (val (Logs.src_log (Logs.Src.create "connections")))
 
+(* for consistency, we maintain a single event stream which
+ * gets replicated to every open connection *)
+
 type push_fn = (Event.event, Sexp.t) result option -> unit
 type conn = Cohttp_lwt_unix.Server.conn
 

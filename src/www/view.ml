@@ -20,12 +20,14 @@ let view_music _instance =
 
 	let open Remo_common.Event in
 	fun state ->
-		let track_display = state.track |> Option.map (fun { artist; title } ->
-			div [
-				div [ text title ];
-				div [ text artist ];
-			]
-		) |> Option.default empty in
+		let track_display = match (state.artist, state.title) with
+			| None, None -> empty
+			| artist, title ->
+				div [
+					div [ text (title |> Option.default "(unknown)") ];
+					div [ text (artist |> Option.default "(unknown)") ];
+				]
+		in
 		let music_controls = div (controls |> List.map (fun (cmd, icon) ->
 			span ~a:[
 				a_class ("music-button music-" ^ icon);
