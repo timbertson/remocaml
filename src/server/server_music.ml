@@ -54,15 +54,24 @@ let delayed_stream (stream: 'a Lwt_stream.t Lwt.t) : 'a Lwt_stream.t =
 let player_events player =
 	let open React in
 	let open Event in
-	let get_string key : OBus_value.V.single -> (string, Sexp.t) result = let open OBus_value.V in function
+	let rec get_string key : OBus_value.V.single -> (string, Sexp.t) result = let open OBus_value.V in function
 		| Basic (String v) -> Ok v
-		| _ -> Error (Sexp.Atom ("Unexpected dbus value type for key " ^ key))
+		| Array (_typ, values) -> get_string_of_list key values
+		| Structure (values) -> get_string_of_list key values
+		| other -> Error (Sexp.Atom ("Unexpected dbus value for key " ^ key ^ (string_of_single other)))
+	and get_string_of_list key values =
+		values |> List.fold_left (fun acc single ->
+			acc |> R.bindr (fun acc ->
+				get_string key single |> R.map (fun s -> s :: acc)
+			)
+		) (Ok []) |> R.map (String.concat ~sep:", ")
 	in
 	let current_artist x = Current_artist (Some x) in
 	let current_title x = Current_title (Some x) in
 	let metadata_change_events map = (
-		Log.debug(fun m->m "Saw changes to metadata keys: %s"
-			(DbusMap.keys map |> String.concat ~sep:","));
+		Log.debug(fun m->m "Saw changes to metadata: %s"
+			(map |> List.map (fun (k,v) ->
+				k ^ ": " ^ (OBus_value.V.string_of_single v)) |> String.concat ~sep:","));
 		let music_events = map |> List.filter_map (fun (key, value) ->
 			match key with
 				| "xesam:artist" -> Some (get_string key value |> R.map current_artist)
@@ -78,6 +87,7 @@ let player_events player =
 			|> Lwt_react.E.to_stream
 			|> Lwt_stream.flatten
 	) |> delayed_stream
+
 
 let first_mpris_service bus : OBus_peer.t option Lwt.t =
 	let%lwt all = OBus_bus.list_names bus in

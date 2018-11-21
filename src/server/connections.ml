@@ -10,6 +10,26 @@ type conn = Cohttp_lwt_unix.Server.conn
 
 let conns : (conn * push_fn) list ref = ref []
 
+
+module Timeout = struct
+	let ephemeral = ref false
+	let set_ephemeral eph =
+		ephemeral := eph
+
+	let current : Lwt_timeout.t option ref = ref None
+	let clear () =
+		!current |> Option.may (fun prev ->
+			Lwt_timeout.stop prev;
+			current := None
+		)
+
+	let start () =
+		if !ephemeral then (
+			Log.info (fun m->m"no remaining connections, timing out after 20s");
+			current := Some (Lwt_timeout.create 20 (fun () -> exit 1))
+		)
+end
+
 let conn_closed closed =
 	Log.info(fun m->m"Connection closed");
 	let initial_cons = !conns |> List.length in
@@ -19,11 +39,13 @@ let conn_closed closed =
 		) else false
 	);
 	let final_cons = !conns |> List.length in
-	Log.info(fun m->m"open conns is %d (was %d)" final_cons initial_cons)
+	Log.info(fun m->m"open conns is %d (was %d)" final_cons initial_cons);
+	if (final_cons = 0) then Timeout.start ()
 
 let add_event_stream conn initial_events =
 	let (stream, push) = Lwt_stream.create () in
 	conns := (conn, push) :: !conns;
+	Timeout.clear ();
 	initial_events |> List.iter (fun event -> push (Some event));
 	stream
 

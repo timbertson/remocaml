@@ -177,9 +177,19 @@ let init_logs () =
 	in
 	Logs.set_reporter (tagging_reporter default_reporter)
 
+let getenv key =
+	try Some (Unix.getenv key) with Not_found -> None
+
 let () =
 	init_logs ();
-	let config = Server_config.load ~state_dir:("/tmp/remocaml") "config/remocaml.sexp" |> R.force in
+
+	let ephemeral = (try Unix.getenv "REMOCAML_EPHEMERAL" with Not_found -> "false") = "true" in
+	Connections.Timeout.set_ephemeral ephemeral;
+
+	let config_path = getenv "REMOCAML_CONFIG" |> Option.default "config/remocaml.sexp" in
+	let state_dir = getenv "REMOCAML_STATE" |> Option.default "/tmp/remocaml" in
+
+	let config = Server_config.load ~state_dir config_path |> R.force in
 	let server_state = Server_state.load config |> R.force in
 	Log.debug(fun m->m"server state: %s" (Server_state.sexp_of_state server_state |> Sexp.to_string));
 	let static_cache = StringMap.empty in
