@@ -29,6 +29,10 @@ pre {
 	margin-bottom: 5px;
 }
 
+.card-body {
+	background-color: #eee;
+}
+
 .music-play:before { content: fa-content($fa-var-play); }
 .music-pause:before { content: fa-content($fa-var-pause); }
 .music-forward:before { content: fa-content($fa-var-forward); }
@@ -38,33 +42,40 @@ pre {
 	background-color: rgb(127, 180, 236);
 }
 
-.volume-color {
-	background: rgb(206, 206, 206);
-	border: 1px solid rgb(167, 167, 167);
+.volume-slider {
+	position: relative;
+	border-radius: 20px;
+	height:28px;
+	margin-top:10px;
+	display:inline-block;
+	width: 150px;
+	margin-left: 0.5em;
+	background: #aaa;
+	border: 1px solid #aaa;
 }
 
-.volume-minus:before { content: fa-content($fa-var-volume-down); }
-.volume-plus:before { content: fa-content($fa-var-volume-up); }
+.volume-color {
+	height:100%;
+	border-radius: 20px;
+	background: white;
+}
 
 .volume-button {
 	@extend %fa-icon;
 	@extend .fas;
-	font-size: 0.7em;
+	padding: 0 7px;
+	position: absolute;
+	top: 5px;
+	color: #656565;
 }
 
-.volume-slider {
-	border-radius: 20px;
-	height:20px;
-	margin-top:10px;
-	display:inline-block;
-	width: 120px;
-	margin-left: 0.5em;
+.volume-minus {
+	left: 3px;
+	&:before { content: fa-content($fa-var-minus); }
 }
-
-.volume-slider * {
-	background: white;
-	border-radius: 20px;
-	height:100%;
+.volume-plus {
+	right: 0;
+	&:before { content: fa-content($fa-var-plus); }
 }
 
 // var artistStyle = @CSS("{ color: rgb(155, 155, 155); font-weight: bold; font-size:0.8em; }");
@@ -73,6 +84,9 @@ pre {
 
 .music-details {
 	font-size:1.8em; line-height:1.1em;
+	.artist { color: rgb(155, 155, 155); font-weight: bold; font-size:0.8em; }
+	// var playStateStyle = @CSS("{ color: rgba(0,0,0,0.3); font-size: 0.7em; position: absolute; top:0.2em; right:1em; }");
+	.track { color: #333; }
 }
 
 .task {
@@ -171,6 +185,7 @@ pre {
 	margin-bottom:0.5em;
 	font-size: 1em;
 }
+
 
 /* var Button = (name) -> h.Span(' ', {'class':"glyphicon glyphicon-#{name}"}) .. buttonStyle; */
 

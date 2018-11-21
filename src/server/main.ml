@@ -183,7 +183,6 @@ let () =
 	let server_state = Server_state.load config |> R.force in
 	Log.debug(fun m->m"server state: %s" (Server_state.sexp_of_state server_state |> Sexp.to_string));
 	let static_cache = StringMap.empty in
-	(* Invalid_argument !?!?!? *)
 	let static_cache = StringSet.fold (fun path map ->
 		StringMap.add path (read_entire_file (Filename.concat static_root path)) map
 	) static_files static_cache in

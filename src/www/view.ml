@@ -4,6 +4,11 @@ open Html
 open Ui_state
 open Sexplib
 
+let card ?header ?(body_cls=[]) body = div ~a:[a_class "card"] [
+	(header |> Option.map (fun header -> div ~a:[a_class "card-header"] [ text header ]) |> Option.default empty);
+	div ~a:[a_class_list (body_cls @ ["card-body"])] body;
+]
+
 let view_music _instance =
 	let open Music in
 	let controls = [
@@ -19,8 +24,8 @@ let view_music _instance =
 			| None, None -> empty
 			| artist, title ->
 				div [
-					div [ text (title |> Option.default "(unknown)") ];
-					div [ text (artist |> Option.default "(unknown)") ];
+					div ~a:[a_class "title"] [ text (title |> Option.default "(unknown)") ];
+					div ~a:[a_class "artist"] [ text (artist |> Option.default "(unknown)") ];
 				]
 		in
 		let music_controls = div (controls |> List.map (fun (cmd, icon) ->
@@ -30,29 +35,28 @@ let view_music _instance =
 			] []
 		)) in
 		let volume_controls = (
-			let volume_max_width = 120.0 in (* px *)
 			let volume_bar_style =
 				let open Printf in
-				let volume_width = (state.volume |> Option.default 0.0) *. volume_max_width in
-				sprintf "width: %0.1f;" volume_width
+				let volume_width = (state.volume |> Option.default 0.0) *. 100.0 in
+				sprintf "width: %0.1f%%;" volume_width
 			in
 			let btn cmd icon = span ~a:[
 				a_class ("volume-button volume-" ^ icon);
 				a_onclick (emitter (Invoke (Music_command cmd)));
 			] []
 			in
-			div [
+			div ~a:[a_class "volume-slider"] [
 				btn Quieter "minus";
-				div ~a:[a_class "volume-slider"] [
-					div ~a:[a_style volume_bar_style; a_class "volume-color"] [];
-				];
+				div ~a:[a_style volume_bar_style; a_class "volume-color"] [];
 				btn Louder "plus";
 			]
 		) in
-		div ~a:[a_class "music-details"] [
-			music_controls;
-			volume_controls;
-			track_display;
+		card ~body_cls:["music-card"] [
+				music_controls;
+				div ~a:[a_class "music-details"] [
+					track_display;
+				];
+				volume_controls;
 		]
 
 let view_job _instance = fun _state ->
@@ -68,22 +72,24 @@ let view ~show_debug instance =
 		let { server_state; state_override; error; log } = state in
 		let server_state = state_override |> Option.default server_state in
 		let { music_state; _ } = server_state in
-		div [
-			(error |> Option.map (fun err ->
-				div ~a:[a_class "alert alert-danger"] [
-					h1 [ text "Error:"];
-					text (Sexp.to_string err)
-				]
-			) |> Option.default empty);
-			(view_music music_state);
-			(if show_debug then (
-				(log |> Option.map (fun log ->
-					div [
-						div [text "log:"];
-						div [text log]
+		div ~a:[a_class "container"] [
+			div [
+				(error |> Option.map (fun err ->
+					div ~a:[a_class "alert alert-danger"] [
+						h1 [ text "Error:"];
+						text (Sexp.to_string err)
 					]
-				)) |> Option.default empty
-			) else empty);
+				) |> Option.default empty);
+				(view_music music_state);
+				(if show_debug then (
+					(log |> Option.map (fun log ->
+						div [
+							div [text "log:"];
+							div [text log]
+						]
+					)) |> Option.default empty
+				) else empty);
+			]
 		]
 
 
