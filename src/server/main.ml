@@ -4,6 +4,7 @@ open Cohttp_lwt_unix
 open Sexplib
 open Remo_common
 open Astring
+module List = List_ext
 open Util
 module R = Rresult_ext
 module Log = (val (Logs.src_log (Logs.Src.create "main")))
@@ -33,7 +34,6 @@ let reconnect state =
 			peers;
 		}
 	};
-	(* TODO: trigger a refresh of music state *)
 	Lwt.return error_events
 
 let handler ~state ~static_cache = fun conn req body ->
@@ -78,13 +78,15 @@ let handler ~state ~static_cache = fun conn req body ->
 				Ok (Event.(Reset_state client_state))
 			] in
 			let events = Connections.add_event_stream conn (reconnect_events @ initialize_state) in
-			let empty_stream () = Lwt_stream.from_direct (fun () -> None) in
 
 			let dbus_events: (Event.event, Sexp.t) result Lwt_stream.t =
 				let open Server_music in
-				(!state).Server_state.server_music_state.peers.player
-					|> Option.map (Server_music.player_events)
-					|> Option.default_fn empty_stream
+				let peers = (!state).Server_state.server_music_state.peers in
+				(* TODO: combine vs choose? *)
+				Lwt_stream.choose (List.filter_map identity [
+					peers.player |> Option.map (Server_music.player_events);
+					peers.volume |> Option.map (Server_music.volume_events);
+				])
 			in
 
 			let response = Lwt_stream.choose [dbus_events; events] |> Lwt_stream.map (fun event ->

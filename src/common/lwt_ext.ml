@@ -13,3 +13,5 @@ let zip a b =
 			| Some a, Some b -> (a,b)
 			| _ -> failwith "Impossible!"
 	))
+
+let bindr fn t = bind t fn

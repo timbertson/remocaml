@@ -83,6 +83,7 @@ pre {
 // var trackStyle = @CSS("{ color: #333; }");
 
 .music-details {
+	padding-top: 0.2em;
 	font-size:1.8em; line-height:1.1em;
 	.artist { color: rgb(155, 155, 155); font-weight: bold; font-size:0.8em; }
 	// var playStateStyle = @CSS("{ color: rgba(0,0,0,0.3); font-size: 0.7em; position: absolute; top:0.2em; right:1em; }");

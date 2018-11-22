@@ -1,5 +1,5 @@
 open Remo_common
-open List_ext
+module List = List_ext
 module R = Rresult_ext
 open Astring
 open Sexplib
