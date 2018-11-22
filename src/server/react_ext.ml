@@ -17,6 +17,14 @@ module E = struct
 			) in
 			()
 		)
+
+	let prefix init events =
+		let rv, send = E.create () in
+		send init;
+		_retain_and_exec rv (fun () ->
+			let (_:unit event) = events |> E.map send in
+			()
+		)
 end
 
 module S = struct

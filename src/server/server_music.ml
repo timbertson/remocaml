@@ -5,7 +5,6 @@ open Sexplib.Conv
 open Music
 module List = List_ext
 open Util
-open React
 open React_ext
 module Lwt = Lwt_ext
 module R = Rresult_ext
@@ -17,8 +16,13 @@ module DbusMap = struct
 		map |> List.map (fun (key,_) -> key)
 end
 
+type volume = {
+	pa_core: OBus_proxy.t;
+	pa_device: OBus_proxy.t;
+}
+
 type peers = {
-	volume: OBus_proxy.t option;
+	volume: volume option;
 	player: OBus_proxy.t option;
 }
 
@@ -85,9 +89,9 @@ let player_events player =
 			|> Lwt_react.E.to_stream
 	) |> delayed_stream
 
-let volume_events peer =
+let volume_events { pa_core; pa_device } =
 	let open Event in
-	let volume_change_events steps v = (
+	let volume_change_event steps v = (
 		let to_ratio v = (float_of_int v) /. (float_of_int steps) in
 		let average ints =
 			let sum = List.fold_left (+) 0 ints in
@@ -102,11 +106,15 @@ let volume_events peer =
 	) in
 
 	let open Pulseaudio_client.Org_PulseAudio_Core1_Device in
-	let volume_steps : int Lwt.t = volume_steps peer |> OBus_property.get in
-	let volume_changes : int list signal Lwt.t = OBus_property.monitor (volume peer) in
-	Lwt.zip volume_steps volume_changes |> Lwt.map (fun (steps, signal) ->
-		signal |> S.changes_with_initial
-			|> E.map (volume_change_events steps)
+	let volume_steps : int Lwt.t = volume_steps pa_device |> OBus_property.get in
+	let initial_volume : int list Lwt.t = volume pa_device |> OBus_property.get in
+	let volume_changes : int list React.event Lwt.t = volume_updated pa_device in
+	let enable_subscription = Pulseaudio_client.Org_PulseAudio_Core1.listen_for_signal
+		pa_core ~signal:"org.PulseAudio.Core1.Device.VolumeUpdated" ~objects:[pa_device] in
+
+	Lwt.zip (Lwt.zip volume_steps initial_volume) (Lwt.zip enable_subscription volume_changes) |> Lwt.map (fun ((steps, initial), ((), signal)) ->
+		signal |> E.prefix initial
+			|> E.map (volume_change_event steps)
 			|> Lwt_react.E.to_stream
 	) |> delayed_stream
 
@@ -150,12 +158,12 @@ let invoke state =
 	in
 	let volume direction =
 		state.peers.volume
-			|> Option.map (fun player : (unit, Sexplib.Sexp.t) result Lwt.t ->
-				R.wrap_lwt (fun player : unit Lwt.t ->
+			|> Option.map (fun volume : (unit, Sexplib.Sexp.t) result Lwt.t ->
+				R.wrap_lwt (fun { pa_device; _ } : unit Lwt.t ->
 					let open Pulseaudio_client.Org_PulseAudio_Core1_Device in
 					let%lwt (max, vol) = Lwt.zip
-						(volume_steps player |> OBus_property.get)
-						(volume player |> OBus_property.get)
+						(volume_steps pa_device |> OBus_property.get)
+						(volume pa_device |> OBus_property.get)
 					in
 					let increment = max / 20 in
 					let updated = vol |> List.map (fun vol ->
@@ -175,8 +183,8 @@ let invoke state =
 							(volume_float vol)
 							(volume_float updated)
 					);
-					OBus_property.set (volume player) updated
-				) player
+					OBus_property.set (volume pa_device) updated
+				) volume
 			)
 			|> Option.default_fn (fun () -> Lwt.return (Ok ()))
 	in
@@ -188,7 +196,7 @@ let invoke state =
 	| Louder -> volume 1
 	| Quieter -> volume (-1)
 
-let discover_volume_device session_bus : OBus_proxy.t Lwt.t =
+let discover_volume_device session_bus : volume Lwt.t =
 	let%lwt (address:string) = (
 		let%lwt peer = OBus_bus.get_peer session_bus "org.PulseAudio1" in
 		let proxy = OBus_proxy.make ~peer ~path:(OBus_path.of_string "/org/pulseaudio/server_lookup1") in
@@ -199,8 +207,9 @@ let discover_volume_device session_bus : OBus_proxy.t Lwt.t =
 	(* now connect to the server directly *)
 	let%lwt conn = OBus_connection.of_addresses ~shared:true (OBus_address.of_string address) in
 	let pa_peer = OBus_peer.make ~connection:conn ~name:("org.PulseAudio.Core1") in
-	let pa_proxy = OBus_proxy.make ~peer:pa_peer ~path:(OBus_path.of_string "/org/pulseaudio/core1") in
-	Pulseaudio_client.Org_PulseAudio_Core1.fallback_sink pa_proxy |> OBus_property.get
+	let pa_core = OBus_proxy.make ~peer:pa_peer ~path:(OBus_path.of_string "/org/pulseaudio/core1") in
+	let%lwt pa_device = Pulseaudio_client.Org_PulseAudio_Core1.fallback_sink pa_core |> OBus_property.get in
+	Lwt.return { pa_core; pa_device }
 
 let connect () =
 	let%lwt bus = OBus_bus.session () in

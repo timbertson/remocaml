@@ -332,14 +332,13 @@ struct
   (*  *)
   (* let property_list proxy = *)
   (*   OBus_property.make p_PropertyList proxy *)
-  (*  *)
-  (* let volume_updated proxy = *)
-  (*   OBus_signal.map *)
-  (*     (fun volume -> *)
-  (*        let volume = List.map Int32.to_int volume in *)
-  (*        volume) *)
-  (*     (OBus_signal.connect s_VolumeUpdated proxy) *)
-  (*  *)
+
+  let volume_updated proxy =
+    (OBus_signal.connect (OBus_signal.make s_VolumeUpdated proxy))
+      |> Lwt.map (fun e ->
+        React.E.map (fun volume -> List.map Int32.to_int volume) e
+      )
+
   (* let mute_updated proxy = *)
   (*   OBus_signal.make s_MuteUpdated proxy *)
   (*  *)
