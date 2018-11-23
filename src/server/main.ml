@@ -82,7 +82,6 @@ let handler ~state ~static_cache = fun conn req body ->
 			let dbus_events: (Event.event, Sexp.t) result Lwt_stream.t =
 				let open Server_music in
 				let peers = (!state).Server_state.server_music_state.peers in
-				(* TODO: combine vs choose? *)
 				Lwt_stream.choose (List.filter_map identity [
 					peers.player |> Option.map (Server_music.player_events);
 					peers.volume |> Option.map (Server_music.volume_events);
@@ -93,7 +92,8 @@ let handler ~state ~static_cache = fun conn req body ->
 				event |> R.map Event.sexp_of_event
 				|> R.sexp_of_result
 				|> fun s ->
-						"data: " ^ (Sexp.to_string s) ^ "\n\n"
+					Log.debug (fun m->m "emitting: %s" (Sexp.to_string s));
+					"data: " ^ (Sexp.to_string s) ^ "\n\n"
 			) in
 			let headers = Header.add_list (Header.init ()) [
 				"Cache-Control", "no-cache";

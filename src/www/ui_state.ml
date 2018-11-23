@@ -35,6 +35,7 @@ type event_result = (Event.event, Sexp.t) R.result
 let sexp_of_event_result = R.sexp_of_result % (R.map Event.sexp_of_event)
 
 type event =
+	| Reconnect
 	| Server_event of event_result
 	| Invoke of Event.command
 	[@@deriving sexp_of]
@@ -42,11 +43,15 @@ type event =
 let update state : event -> t = function
 	| Server_event (Error err) -> { state with error = Some err }
 	| Server_event (Ok evt) -> { state with server_state = Event.update state.server_state evt }
-	| Invoke _ -> state
+	| Reconnect | Invoke _ -> state
 
-let update state event = { (update state event) with log = Some (Sexp.to_string (sexp_of_event event)) }
+let update state event = { (update state event) with log = match event with
+	| Server_event _ -> Some (Sexp.to_string (sexp_of_event event))
+	| Reconnect | Invoke _ -> state.log
+}
 
 let command instance = fun _state -> function
+	| Reconnect -> assert false
 	| Server_event _ -> None
 	| Invoke command -> Some (
 			let payload = (Sexp.to_string (Event.sexp_of_command command)) in

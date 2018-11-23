@@ -11,15 +11,14 @@ let card ?header ?(body_cls=[]) body = div ~a:[a_class "card"] [
 
 let view_music _instance =
 	let open Music in
-	let controls = [
-		Previous, "backward";
-		Play, "play";
-		Pause, "pause";
-		Next, "forward";
-	] in
-
 	let open Remo_common.Event in
 	fun state ->
+		let controls = [
+			Previous, "backward";
+			PlayPause, if state.playing then "pause" else "play";
+			Next, "forward";
+		] in
+
 		let track_display = match (state.artist, state.title) with
 			| None, None -> empty
 			| artist, title ->
@@ -30,7 +29,7 @@ let view_music _instance =
 		in
 		let music_controls = div (controls |> List.map (fun (cmd, icon) ->
 			span ~a:[
-				a_class ("music-button music-" ^ icon);
+				a_class ("music-button rounded-circle music-" ^ icon);
 				a_onclick (emitter (Invoke (Music_command cmd)))
 			] []
 		)) in
@@ -41,7 +40,7 @@ let view_music _instance =
 				sprintf "width: %0.1f%%;" volume_width
 			in
 			let btn cmd icon = span ~a:[
-				a_class ("volume-button volume-" ^ icon);
+				a_class ("volume-button rounded-circle volume-" ^ icon);
 				a_onclick (emitter (Invoke (Music_command cmd)));
 			] []
 			in
@@ -52,11 +51,15 @@ let view_music _instance =
 			]
 		) in
 		card ~body_cls:["music-card"] [
+				div ~a:[
+					a_class "global-button rounded-circle button-reload";
+					a_onclick (emitter (Reconnect));
+				] [];
 				music_controls;
+				volume_controls;
 				div ~a:[a_class "music-details"] [
 					track_display;
 				];
-				volume_controls;
 		]
 
 let view_job _instance = fun _state ->
@@ -84,8 +87,10 @@ let view ~show_debug instance =
 				(if show_debug then (
 					(log |> Option.map (fun log ->
 						div [
-							div [text "log:"];
-							div [text log]
+							div ~a:[a_class "log"] [
+								h3 [text "Log:"];
+								div [text log];
+							];
 						]
 					)) |> Option.default empty
 				) else empty);

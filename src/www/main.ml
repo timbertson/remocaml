@@ -1,14 +1,15 @@
 open Vdoml
 open Remo_common
 module R = Rresult_ext
-(* module Log = (val Logs.log_module "main") *)
 module Log = (val (Logs.src_log (Logs.Src.create "main")))
 open Pervasives
 
 open Sexplib
 
 let component ~show_debug ~fake tasks =
-	Ui.Tasks.sync tasks (fun instance ->
+	let active_event_source = ref None in
+	let reconnect instance =
+		!active_event_source |> Option.may (fun event_source -> event_source##close);
 		let event_source = new%js EventSource.eventSource (Js.string "/events") in
 		event_source##.onmessage := Dom.handler (fun event ->
 			let data = event##.data |> Js.to_string in
@@ -21,13 +22,21 @@ let component ~show_debug ~fake tasks =
 			in
 			Ui.emit instance (Ui_state.Server_event event);
 			Js._true
-		)
-	);
+		);
+		active_event_source := Some (event_source)
+	in
+	Ui.Tasks.sync tasks reconnect;
 	let initial_state = Ui_state.init ~fake () in
+	let command instance =
+		let command = Ui_state.command instance in
+		fun state -> function
+			| Ui_state.Reconnect -> reconnect instance; None
+			| other -> command state other
+	in
 	Ui.root_component
 		~eq:Ui_state.eq
 		~update:Ui_state.update
-		~command:Ui_state.command
+		~command
 		~view:(View.view ~show_debug)
 		initial_state
 
