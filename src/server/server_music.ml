@@ -67,8 +67,8 @@ let player_events player =
 	let current_title x = Current_title (Some x) in
 	let play_status_change_event = function
 		| "Playing" -> Ok (Music_event (Current_playing true))
-		| "Paused" -> Ok (Music_event (Current_playing false))
-		| other -> Error (Sexp.Atom ("Expected Playing/Paused, got " ^ other))
+		| "Paused" | "Stopped" -> Ok (Music_event (Current_playing false))
+		| other -> Error (Sexp.Atom ("Unknown play status: " ^ other))
 	in
 	let metadata_change_events map = (
 		Log.debug(fun m->m "Saw changes to metadata: %s"
@@ -87,20 +87,23 @@ let player_events player =
 	let open Org_mpris_MediaPlayer2_Player in
 	let metadata_events = OBus_property.monitor (metadata player)
 		|> Lwt.map (fun signal ->
-			signal |> S.changes_with_initial "metadata"
+			signal |> S.changes_with_initial
 				|> E.map metadata_change_events
 				|> E.flatten
-				|> Lwt_react.E.to_stream
-		) |> delayed_stream
+		)
 	in
 	let play_status_events = OBus_property.monitor (playback_status player)
 		|> Lwt.map (fun signal ->
-			signal |> S.changes_with_initial "play status"
+			signal |> S.changes_with_initial
 				|> E.map play_status_change_event
-				|> Lwt_react.E.to_stream
-		) |> delayed_stream
+		)
 	in
-	Lwt_stream.choose [metadata_events; play_status_events]
+
+	let stream_of_events_lwt events =
+		events |> Lwt.map Lwt_react.E.to_stream |> delayed_stream in
+
+	Lwt_stream.choose (
+		[ metadata_events; play_status_events ] |> List.map stream_of_events_lwt)
 
 let volume_events { pa_core; pa_device } =
 	let open Event in
@@ -126,7 +129,7 @@ let volume_events { pa_core; pa_device } =
 		pa_core ~signal:"org.PulseAudio.Core1.Device.VolumeUpdated" ~objects:[pa_device] in
 
 	Lwt.zip (Lwt.zip volume_steps initial_volume) (Lwt.zip enable_subscription volume_changes) |> Lwt.map (fun ((steps, initial), ((), signal)) ->
-		signal |> E.prefix initial "volume"
+		signal |> E.prefix initial
 			|> E.map (volume_change_event steps)
 			|> Lwt_react.E.to_stream
 	) |> delayed_stream

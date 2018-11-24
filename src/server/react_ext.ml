@@ -5,43 +5,25 @@ module Log = (val (Logs.src_log (Logs.Src.create "TMP")))
 module E = struct
 	include E
 
-	let _retain_and_exec ev fn =
-		let (_: [`R of unit -> unit]) = E.retain ev fn in
-		fn ();
-		ev
+	let _retain_any ~result obj =
+		let (_: [`R of unit -> unit]) = E.retain result (fun () -> ignore obj) in
+		result
 
 	let flatten events =
 		let rv, send = E.create () in
-		_retain_and_exec rv (fun () ->
-			let (_:unit event) = events |> E.map (fun events ->
-				events |> List.iter send
-			) in
-			()
-		)
+		_retain_any ~result:rv (events |> E.map (fun events ->
+			events |> List.iter send
+		) : unit event)
 
-	let prefix init desc events =
+	let prefix init events =
 		let rv, send = E.create () in
-		Log.info(fun m->m"Sending initial %s" desc);
 		Lwt.async (fun () -> Lwt_main.yield () |> Lwt.map (fun () -> send init));
 		(* send init; *)
-		_retain_and_exec rv (fun () ->
-			let send e = Log.info(fun m->m"Sending subsequent %s" desc); send e in
-			let (_:unit event) = events |> E.map send in
-			()
-		)
+		_retain_any ~result:rv (events |> E.map send)
 end
 
 module S = struct
 	include S
-	let changes_with_initial desc signal =
-		Log.info(fun m->m"Prepending initial event %s" desc);
-		let rv, send = E.create () in
-		(* XXX this only seems to work if I delay the send *)
-		Lwt.async (fun () -> Lwt_main.yield () |> Lwt.map (fun () -> send (signal |> S.value)));
-		(* send (signal |> S.value); *)
-		E._retain_and_exec rv (fun () ->
-			let send e = Log.info(fun m->m"Sending subsequent %s" desc); send e in
-			let (_:unit event) = signal |> S.changes |> E.map send in
-			()
-		)
+	let changes_with_initial signal =
+		E.prefix (S.value signal) (S.changes signal)
 end
