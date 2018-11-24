@@ -88,7 +88,7 @@ let handler ~state ~static_cache = fun conn req body ->
 				])
 			in
 
-			let response = Lwt_stream.choose [dbus_events; events] |> Lwt_stream.map (fun event ->
+			let response = Lwt_stream.choose [events; dbus_events] |> Lwt_stream.map (fun event ->
 				event |> R.map Event.sexp_of_event
 				|> R.sexp_of_result
 				|> fun s ->

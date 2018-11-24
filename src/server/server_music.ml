@@ -63,8 +63,8 @@ let player_events player =
 		values |> List.map (get_string key)
 			|> R.collect |> R.map (String.concat ~sep:", ")
 	in
-	let current_artist x = Current_artist (Some x) in
-	let current_title x = Current_title (Some x) in
+	let set_artist track x = { track with artist = Some x } in
+	let set_title track x = { track with title = Some x } in
 	let play_status_change_event = function
 		| "Playing" -> Ok (Music_event (Current_playing true))
 		| "Paused" | "Stopped" -> Ok (Music_event (Current_playing false))
@@ -74,33 +74,34 @@ let player_events player =
 		Log.debug(fun m->m "Saw changes to metadata: %s"
 			(map |> List.map (fun (k,v) ->
 				k ^ ": " ^ (OBus_value.V.string_of_single v)) |> String.concat ~sep:","));
-		let music_events = map |> List.filter_map (fun (key, value) ->
-			match key with
-				| "xesam:artist" -> Some (get_string key value |> R.map current_artist)
-				| "xesam:title" -> Some (get_string key value |> R.map current_title)
-				| _ -> None
-		) in
-		music_events |> List.map (fun evt -> evt |> R.map (fun evt -> Music_event evt))
+		let current_track = map |> List.fold_left (fun track (key, value) ->
+			track |> R.bindr (fun track ->
+				match key with
+					| "xesam:artist" -> get_string key value |> R.map (set_artist track)
+					| "xesam:title" -> get_string key value |> R.map (set_title track)
+					| _ -> Ok track
+			)
+		) (Ok Music.unknown_track) in
+		current_track |> R.map (fun track -> Music_event (Current_track track))
 	) in
 
 	let open Rhythmbox_client in
 	let open Org_mpris_MediaPlayer2_Player in
 	let metadata_events = OBus_property.monitor (metadata player)
 		|> Lwt.map (fun signal ->
-			signal |> S.changes_with_initial
-				|> E.map metadata_change_events
-				|> E.flatten
+			signal
+			|> S.map metadata_change_events
 		)
 	in
 	let play_status_events = OBus_property.monitor (playback_status player)
 		|> Lwt.map (fun signal ->
-			signal |> S.changes_with_initial
-				|> E.map play_status_change_event
+			signal
+			|> S.map play_status_change_event
 		)
 	in
 
 	let stream_of_events_lwt events =
-		events |> Lwt.map Lwt_react.E.to_stream |> delayed_stream in
+		events |> Lwt.map S.to_lwt_stream |> delayed_stream in
 
 	Lwt_stream.choose (
 		[ metadata_events; play_status_events ] |> List.map stream_of_events_lwt)
@@ -128,10 +129,12 @@ let volume_events { pa_core; pa_device } =
 	let enable_subscription = Pulseaudio_client.Org_PulseAudio_Core1.listen_for_signal
 		pa_core ~signal:"org.PulseAudio.Core1.Device.VolumeUpdated" ~objects:[pa_device] in
 
-	Lwt.zip (Lwt.zip volume_steps initial_volume) (Lwt.zip enable_subscription volume_changes) |> Lwt.map (fun ((steps, initial), ((), signal)) ->
-		signal |> E.prefix initial
-			|> E.map (volume_change_event steps)
-			|> Lwt_react.E.to_stream
+	let volume_changes = Lwt.zip enable_subscription volume_changes |> Lwt.map (fun ((), event) -> event) in
+	Lwt.zip (Lwt.zip volume_steps initial_volume) volume_changes |> Lwt.map (fun ((steps, initial), changes) ->
+		let volume = S.hold initial changes in
+		volume
+			|> S.map (volume_change_event steps)
+			|> S.to_lwt_stream
 	) |> delayed_stream
 
 let first_mpris_service bus : OBus_proxy.t option Lwt.t =

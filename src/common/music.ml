@@ -1,10 +1,14 @@
 open Sexplib.Std
 
+type track = {
+	artist: string option;
+	title: string option;
+} [@@deriving sexp]
+
 type state = {
 	playing: bool;
 	volume: float option;
-	artist: string option;
-	title: string option;
+	track: track;
 } [@@deriving sexp]
 
 type command =
@@ -16,21 +20,23 @@ type command =
 	[@@deriving sexp]
 
 type event =
-	| Current_artist of string option
-	| Current_title of string option
+	| Current_track of track
 	| Current_volume of float option
 	| Current_playing of bool
 	[@@deriving sexp]
 
-let init () = {
-	playing = false;
-	volume = None;
+let unknown_track = {
 	artist = None;
 	title = None;
 }
 
+let init () = {
+	playing = false;
+	volume = None;
+	track = unknown_track;
+}
+
 let update state = function
-	| Current_artist artist -> { state with artist }
-	| Current_title title -> { state with title }
+	| Current_track track -> { state with track }
 	| Current_volume volume -> { state with volume }
 	| Current_playing playing -> { state with playing }

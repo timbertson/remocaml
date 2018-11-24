@@ -19,7 +19,7 @@ let view_music _instance =
 			Next, "forward";
 		] in
 
-		let track_display = match (state.artist, state.title) with
+		let track_display {artist; title } = match (artist, title) with
 			| None, None -> empty
 			| artist, title ->
 				div [
@@ -58,7 +58,7 @@ let view_music _instance =
 				music_controls;
 				volume_controls;
 				div ~a:[a_class "music-details"] [
-					track_display;
+					track_display state.track;
 				];
 		]
 
