@@ -55,11 +55,11 @@ let view_music _instance =
 					a_class "global-button rounded-circle button-reload";
 					a_onclick (emitter (Reconnect));
 				] [];
-				music_controls;
-				volume_controls;
 				div ~a:[a_class "music-details"] [
 					track_display state.track;
 				];
+				music_controls;
+				volume_controls;
 		]
 
 let view_job _instance = fun _state ->

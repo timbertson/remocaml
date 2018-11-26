@@ -137,7 +137,7 @@ let volume_events { pa_core; pa_device } =
 			|> S.to_lwt_stream
 	) |> delayed_stream
 
-let first_mpris_service bus : OBus_proxy.t option Lwt.t =
+let first_mpris_service config bus : OBus_proxy.t option Lwt.t =
 	let%lwt all = OBus_bus.list_names bus in
 	let dump_names all =
 		let formatted = List.map (fun x -> " - " ^ x) (List.sort compare all) in
@@ -148,7 +148,16 @@ let first_mpris_service bus : OBus_proxy.t option Lwt.t =
 		String.is_prefix ~affix:mpris_prefix name
 	) in
 	Log.debug (fun m -> m"All MPRIS names:\n%s" (dump_names mpris_names));
-	List.nth_opt mpris_names 0 |> Option.map (fun name ->
+
+	let priority_pick = config.Server_config.mpris_priority |> List.fold_left (fun acc name ->
+		acc |> Option.or_fn (fun () ->
+			let full = mpris_prefix ^ name in
+			if List.mem full mpris_names then Some full else None
+		)
+	) None in
+	let first = List.nth_opt mpris_names 0 in
+
+	priority_pick |> Option.or_ first |>  Option.map (fun name ->
 		Log.info(fun m->m"Connecting to MPRIS bus %s" name);
 		OBus_bus.get_peer bus name |> Lwt.map (fun peer ->
 			Some (OBus_proxy.make ~peer ~path:(OBus_path.of_string "/org/mpris/MediaPlayer2"))
@@ -229,10 +238,10 @@ let discover_volume_device session_bus : volume Lwt.t =
 	let%lwt pa_device = Pulseaudio_client.Org_PulseAudio_Core1.fallback_sink pa_core |> OBus_property.get in
 	Lwt.return { pa_core; pa_device }
 
-let connect () =
+let connect config =
 	let%lwt bus = OBus_bus.session () in
 	let%lwt (player, volume) = Lwt.zip
-		(first_mpris_service bus)
+		(first_mpris_service config bus)
 		(discover_volume_device bus)
 	in
 	Lwt.return {

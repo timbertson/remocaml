@@ -22,9 +22,9 @@ let static_root = "_build/default/src/www"
 
 type 'a http_result = ('a, (Code.status_code * Sexp.t)) result
 
-let reconnect state =
+let reconnect config state =
 	let current_state: Server_state.state = !state in
-	let%lwt music_peers = R.wrap_lwt Server_music.connect () in
+	let%lwt music_peers = R.wrap_lwt Server_music.connect config.Server_config.music in
 	let (peers, error_events) = (match music_peers with
 		| Ok peers -> (peers, [])
 		| Error err -> (Server_music.disconnected, [Error err])
@@ -36,7 +36,7 @@ let reconnect state =
 	};
 	Lwt.return error_events
 
-let handler ~state ~static_cache = fun conn req body ->
+let handler ~config ~state ~static_cache = fun conn req body ->
 	let uri = req |> Request.uri in
 	let path = Uri.path uri in
 	let meth = req |> Request.meth in
@@ -72,7 +72,7 @@ let handler ~state ~static_cache = fun conn req body ->
 		| (`GET, "events") ->
 			(* reconnect music peers on every connection. It's not that expensive,
 			 * and the mpris peer may have changed *)
-			let%lwt reconnect_events = reconnect state in
+			let%lwt reconnect_events = reconnect config state in
 			let client_state = !state |> Server_state.client_state in
 			let initialize_state = [
 				Ok (Event.(Reset_state client_state))
@@ -200,13 +200,13 @@ let () =
 	) static_files static_cache in
 
 	let state = ref server_state in
-	let callback = handler ~static_cache ~state in
+	let callback = handler ~config ~static_cache ~state in
 	let server = Server.create
 		~mode:(`TCP (`Port 8000))
 		~on_exn:(fun _ -> Log.warn (fun m->m"Error in server; ignoring"))
 		(Server.make ~callback ()) in
 	Lwt.async (fun () ->
-		let%lwt (_:_ list) = reconnect state in
+		let%lwt (_:_ list) = reconnect config state in
 		Lwt.return_unit);
 	let () = (Lwt_main.run server) in
 	()

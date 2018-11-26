@@ -1,6 +1,5 @@
 (* `include React` would be nicer, but leads to duplicate submodule definitions *)
 open React
-module Log = (val (Logs.src_log (Logs.Src.create "TMP")))
 
 module S = struct
 	include S

@@ -81,19 +81,14 @@ pre {
 	&:before { content: fa-content($fa-var-plus); }
 }
 
-// var artistStyle = @CSS("{ color: rgb(155, 155, 155); font-weight: bold; font-size:0.8em; }");
-// var playStateStyle = @CSS("{ color: rgba(0,0,0,0.3); font-size: 0.7em; position: absolute; top:0.2em; right:1em; }");
-// var trackStyle = @CSS("{ color: #333; }");
-
 .music-details {
-	padding-top: 0.4em;
+	margin-bottom: 0.4em;
 	font-size:1.6em;
+	height: 2.2em;
 	line-height:1.1em;
-	.artist {
-		color: rgb(135, 135, 135);
-		// font-weight: bold; font-size:0.8em;
-	}
-	// var playStateStyle = @CSS("{ color: rgba(0,0,0,0.3); font-size: 0.7em; position: absolute; top:0.2em; right:1em; }");
+	overflow: hidden;
+	white-space: nowrap;
+	.artist { color: rgb(135, 135, 135); }
 	.track { color: #333; }
 }
 
