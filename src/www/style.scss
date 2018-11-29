@@ -32,10 +32,6 @@ pre {
 	margin-bottom: 5px;
 }
 
-.card-body {
-	background-color: #eee;
-}
-
 .music-play:before { content: fa-content($fa-var-play); }
 .music-pause:before { content: fa-content($fa-var-pause); }
 .music-forward:before { content: fa-content($fa-var-forward); }
@@ -209,3 +205,73 @@ pre {
 
 /* var reconnectButtonStyle = @CSS('{display:block; margin:2em auto 2em auto; padding:1em; font-size:2em;}') */
 
+
+.card {
+	margin-bottom: 1em;
+}
+
+.music-card .card-body {
+	background-color: #eee;
+}
+
+
+.job {
+	//padding: 0 1em;
+	color: white;
+
+	h3 {
+		background: rgb(87, 87, 87);
+		border-radius: 10px;
+		border-bottom-right-radius: 0;
+		border-bottom-left-radius: 0;
+		margin: 0;
+		padding: 0.3em;
+		margin-top:1em;
+		border-bottom: 1px solid rgb(116, 116, 116);
+		font-size: 1.4em;
+		font-weight: bold;
+	}
+
+	.invisible {
+		visibility: hidden;
+	}
+
+	&.running h3 {
+		background: rgb(48, 134, 26);
+		border-color: rgb(91, 173, 70);
+	}
+
+	.ctl {
+		clear: both;
+		padding: 0.5em;
+		padding-bottom: 1em;
+		padding-top: 0;
+		background: #333;
+		margin: 0 0 2em 0;
+	}
+
+	.output {
+		margin: 0; padding:0;
+		whitespace:pre;
+		color: white;
+		border-radius: 0;
+		text-align: left;
+		max-height: 20em;
+		overflow:auto;
+		background: transparent;
+		border: none;
+
+		transition-duration: 0.5s;
+		transition-timing-function: ease-in-out;
+	}
+
+	.kill {
+		background: rgb(228, 66, 66);
+		margin-right:1em;
+		float: right;
+	}
+
+	.ctl .glyphicon {
+		font-size:1.5em;
+	}
+}

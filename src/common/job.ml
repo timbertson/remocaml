@@ -1,5 +1,7 @@
 open Sexplib.Std
 
+type id = string [@@deriving sexp]
+
 type job_identity = {
 	id: string;
 	name: string;
@@ -20,8 +22,14 @@ type job = {
 	state: job_state option;
 } [@@deriving sexp]
 
-type command =
-	Run
+type job_command =
+	| Start
+	| Stop
+	| Refresh
+	| Show_output of bool
+	[@@deriving sexp]
+
+type command = id * job_command
 	[@@deriving sexp]
 
 type event =
