@@ -110,3 +110,20 @@ let running_client_job job =
 		)
 	})
 
+let stop job =
+	job.job_execution |> Option.map (function { ex_state; pid; _ } ->
+		Result.wrap (Unix.kill pid) 15 |> R.map (fun () ->
+			let pid_status = Unix.wait pid in
+			Ok (Job_state (job_exited job_execution job))
+		)
+	) |> Option.default (Error (Sexp.Atom "No such job"))
+
+let invoke jobs (id, cmd) =
+	let job = jobs |> List.find_opt (fun job -> job.job_configuration.job_id = id) in
+	job |> Option.map (fun job ->
+		let event =
+			match cmd with
+				| Start -> failwith "TODO"
+				| Stop -> stop_cmd job
+				| Refresh -> failwith "TODO"
+				| Show_output _show -> failwith "TODO"

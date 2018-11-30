@@ -47,4 +47,5 @@ let invoke state =
 	function
 	| Music_command cmd ->
 		Server_music.invoke state.server_music_state cmd
-	| Job_command _cmd -> failwith "TODO"
+	| Job_command cmd ->
+		Server_job.invoke state.server_jobs cmd
