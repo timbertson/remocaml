@@ -32,8 +32,17 @@ type job_command =
 type command = id * job_command
 	[@@deriving sexp]
 
-type event =
-	Job_running of bool
+type job_event =
+	| Job_running of bool
+	| Process_state of process_state
+	| Job_state of job_state option
+	[@@deriving sexp]
+
+<<<<<<< Updated upstream
+type event = job_event
+=======
+type event = id * job_event
+>>>>>>> Stashed changes
 	[@@deriving sexp]
 
 type state = {
@@ -45,4 +54,4 @@ let init () = {
 }
 
 let update state = function
-	| Job_running _ -> state
+	| _ -> state (* TODO *)

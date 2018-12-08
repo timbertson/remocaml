@@ -7,6 +7,7 @@ open Sexplib.Std
 open Sexplib.Conv
 module Log = (val (Logs.src_log (Logs.Src.create "server_state")))
 module StringMap = Map.Make(String)
+open Job
 
 (* A job execution. Either running or recently-run *)
 type job_execution = {
@@ -111,19 +112,27 @@ let running_client_job job =
 	})
 
 let stop job =
-	job.job_execution |> Option.map (function { ex_state; pid; _ } ->
-		Result.wrap (Unix.kill pid) 15 |> R.map (fun () ->
-			let pid_status = Unix.wait pid in
-			Ok (Job_state (job_exited job_execution job))
-		)
-	) |> Option.default (Error (Sexp.Atom "No such job"))
+	job.execution |> Option.map (function { ex_state; pid; _ } ->
+		let open Unix in
+		match ex_state with
+			| Exited _ as ex -> Ok (Process_state ex)
+			| Running ->
+				R.wrap (kill pid) 15 |> R.map (fun () ->
+					let (_pid, pid_status) = waitpid [] pid in
+					let state = match pid_status with
+						| WEXITED code -> Exited (Some code)
+						| WSIGNALED _ | WSTOPPED _ -> Exited (Some 127)
+					in
+					Process_state state
+				)
+	) |> Option.default (Ok (Job_state None))
 
 let invoke jobs (id, cmd) =
-	let job = jobs |> List.find_opt (fun job -> job.job_configuration.job_id = id) in
+	let job = jobs |> List.find_opt (fun job -> job.job_configuration.job = id) in
 	job |> Option.map (fun job ->
-		let event =
-			match cmd with
-				| Start -> failwith "TODO"
-				| Stop -> stop_cmd job
-				| Refresh -> failwith "TODO"
-				| Show_output _show -> failwith "TODO"
+		match cmd with
+			| Start -> failwith "TODO"
+			| Stop -> stop job
+			| Refresh -> failwith "TODO"
+			| Show_output _show -> failwith "TODO"
+	) |> Option.default (Error (Sexp.Atom "No such job"))

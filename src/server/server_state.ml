@@ -42,7 +42,7 @@ let client_state state =
 		};
 	})
 
-let invoke state =
+let invoke state : Event.command -> (unit, Sexplib.Sexp.t) result Lwt.t =
 	let open Event in
 	function
 	| Music_command cmd ->
