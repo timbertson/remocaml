@@ -127,12 +127,14 @@ let stop job =
 				)
 	) |> Option.default (Ok (Job_state None))
 
-let invoke jobs (id, cmd) =
-	let job = jobs |> List.find_opt (fun job -> job.job_configuration.job = id) in
-	job |> Option.map (fun job ->
-		match cmd with
+let invoke : job list -> Job.command -> (unit, Sexplib.Sexp.t) result Lwt.t = fun jobs (id, cmd) ->
+	let job = jobs |> List.find_opt (fun job -> job.job_configuration.job.id = id) in
+	Lwt.return (job |> Option.map (fun job ->
+		(match cmd with
 			| Start -> failwith "TODO"
 			| Stop -> stop job
 			| Refresh -> failwith "TODO"
 			| Show_output _show -> failwith "TODO"
-	) |> Option.default (Error (Sexp.Atom "No such job"))
+			(* TODO: broadcast should be the job of the server, not this module *)
+		) |> R.map (fun event -> Connections.broadcast (Ok (Job_event (id, event))))
+	) |> Option.default (Error (Sexp.Atom "No such job")))

@@ -38,11 +38,7 @@ type job_event =
 	| Job_state of job_state option
 	[@@deriving sexp]
 
-<<<<<<< Updated upstream
-type event = job_event
-=======
 type event = id * job_event
->>>>>>> Stashed changes
 	[@@deriving sexp]
 
 type state = {

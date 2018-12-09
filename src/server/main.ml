@@ -18,7 +18,6 @@ let static_files = StringSet.of_list [
 	"style.css";
 	"bootstrap.min.css";
 ]
-let static_root = "_build/default/src/www"
 
 type 'a http_result = ('a, (Code.status_code * Sexp.t)) result
 
@@ -36,7 +35,7 @@ let reconnect config state =
 	};
 	Lwt.return error_events
 
-let handler ~config ~state ~static_cache = fun conn req body ->
+let handler ~config ~state ~static_cache ~static_root = fun conn req body ->
 	let uri = req |> Request.uri in
 	let path = Uri.path uri in
 	let meth = req |> Request.meth in
@@ -188,23 +187,45 @@ let () =
 	let ephemeral = (try Unix.getenv "REMOCAML_EPHEMERAL" with Not_found -> "false") = "true" in
 	Connections.Timeout.set_ephemeral ephemeral;
 
-	let config_path = getenv "REMOCAML_CONFIG" |> Option.default "config/remocaml.sexp" in
-	let state_dir = getenv "REMOCAML_STATE" |> Option.default "/tmp/remocaml" in
+	let home = getenv "HOME" |> Option.force in
+	let config_path = getenv "REMOCAML_CONFIG" |> Option.default (Filename.concat home ".config/remocaml/config.sexp") in
+	let runtime_dir = getenv "XDG_RUNTIME_DIR" |> Option.default "/tmp" in
+	let state_dir = getenv "REMOCAML_STATE" |> Option.default (Filename.concat runtime_dir "remocaml") in
+
+	let static_root = match getenv "REMOCAML_STATIC" with
+		| Some dir -> dir
+		| None ->
+			let self = Sys.argv.(0) in
+			let here = Filename.dirname self in
+			(* let basedir = Filename.dirname here in *)
+			let basedir_name = Filename.basename here in
+			Log.debug (fun m->m"server basedir: %s" basedir_name);
+			if (basedir_name = "bin") then (
+				(* Running from an installed directory: *)
+				Filename.concat (Filename.dirname here) "share/remocaml"
+			) else (
+				Log.info (fun m->m "Not running from a bin/ directory, assuming development setup");
+				"_build/default/src/www"
+			)
+	in
 
 	let config = Server_config.load ~state_dir config_path |> R.force in
 	let server_state = Server_state.load config |> R.force in
 	Log.debug(fun m->m"server state: %s" (Server_state.sexp_of_state server_state |> Sexp.to_string));
+
 	let static_cache = StringMap.empty in
 	let static_cache = StringSet.fold (fun path map ->
 		StringMap.add path (read_entire_file (Filename.concat static_root path)) map
 	) static_files static_cache in
 
 	let state = ref server_state in
-	let callback = handler ~config ~static_cache ~state in
+	let callback = handler ~config ~static_cache ~static_root ~state in
+	let port = 8000 in
 	let server = Server.create
-		~mode:(`TCP (`Port 8000))
+		~mode:(`TCP (`Port port))
 		~on_exn:(fun _ -> Log.warn (fun m->m"Error in server; ignoring"))
 		(Server.make ~callback ()) in
+	Log.info (fun m->m "Listening on port %d" port);
 	Lwt.async (fun () ->
 		let%lwt (_:_ list) = reconnect config state in
 		Lwt.return_unit);

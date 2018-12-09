@@ -31,6 +31,8 @@
 (install
 	(section share)
 	(files
+		index.html
+		style.css
 		main.bc.js
 		bootstrap.min.css
 	)
