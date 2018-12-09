@@ -14,7 +14,7 @@ type job_execution = {
 	job_id: string;
 	pid: int;
 	ex_state: Job.process_state;
-	stdout: (Unix.file_descr, Sexp.t) result Lazy.t sexp_opaque;
+	stdout: Unix.file_descr R.std_result Lazy.t sexp_opaque;
 	output_buffer: string list option;
 	display_output: bool;
 } [@@deriving sexp_of]
@@ -127,7 +127,7 @@ let stop job =
 				)
 	) |> Option.default (Ok (Job_state None))
 
-let invoke : job list -> Job.command -> (unit, Sexplib.Sexp.t) result Lwt.t = fun jobs (id, cmd) ->
+let invoke : job list -> Job.command -> Event.event option R.std_result Lwt.t = fun jobs (id, cmd) ->
 	let job = jobs |> List.find_opt (fun job -> job.job_configuration.job.id = id) in
 	Lwt.return (job |> Option.map (fun job ->
 		(match cmd with
@@ -135,6 +135,5 @@ let invoke : job list -> Job.command -> (unit, Sexplib.Sexp.t) result Lwt.t = fu
 			| Stop -> stop job
 			| Refresh -> failwith "TODO"
 			| Show_output _show -> failwith "TODO"
-			(* TODO: broadcast should be the job of the server, not this module *)
-		) |> R.map (fun event -> Connections.broadcast (Ok (Job_event (id, event))))
+		) |> R.map (fun event -> Some (Event.Job_event (id, event)))
 	) |> Option.default (Error (Sexp.Atom "No such job")))

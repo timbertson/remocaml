@@ -23,7 +23,7 @@ open Sexp
 
 let unparseable sexp = Error (List [Atom "Unparseable"; sexp])
 
-let parse_cmd cmd : (string list, Sexp.t) result = cmd |> List.map (function
+let parse_cmd cmd : string list R.std_result = cmd |> List.map (function
 	| Atom arg -> Ok arg
 	| other -> unparseable other
 ) |> R.collect

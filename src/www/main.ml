@@ -14,7 +14,7 @@ let component ~show_debug ~fake tasks =
 		event_source##.onmessage := Dom.handler (fun event ->
 			let data = event##.data |> Js.to_string in
 			Log.debug(fun m->m"Got event: %s" data);
-			let event: (Event.event, Sexp.t) result =
+			let event: Event.event R.std_result =
 				data
 					|> R.wrap Sexp.of_string
 					|> R.bindr R.result_of_sexp
