@@ -113,27 +113,27 @@ let running_client_job job =
 
 let stop job =
 	job.execution |> Option.map (function { ex_state; pid; _ } ->
-		let open Unix in
+		let open Lwt_unix in
 		match ex_state with
-			| Exited _ as ex -> Ok (Process_state ex)
+			| Exited _ as ex -> Lwt.return (Ok (Process_state ex))
 			| Running ->
-				R.wrap (kill pid) 15 |> R.map (fun () ->
-					let (_pid, pid_status) = waitpid [] pid in
+				R.wrap (Unix.kill pid) Sys.sigint |> R.map_lwt (fun () ->
+					let%lwt (_pid, pid_status) = waitpid [] pid in
 					let state = match pid_status with
 						| WEXITED code -> Exited (Some code)
 						| WSIGNALED _ | WSTOPPED _ -> Exited (Some 127)
 					in
-					Process_state state
+					Lwt.return (Process_state state)
 				)
-	) |> Option.default (Ok (Job_state None))
+	) |> Option.default (Lwt.return (Ok (Job_state None)))
 
 let invoke : job list -> Job.command -> Event.event option R.std_result Lwt.t = fun jobs (id, cmd) ->
 	let job = jobs |> List.find_opt (fun job -> job.job_configuration.job.id = id) in
-	Lwt.return (job |> Option.map (fun job ->
+	job |> Option.map (fun job ->
 		(match cmd with
 			| Start -> failwith "TODO"
 			| Stop -> stop job
 			| Refresh -> failwith "TODO"
 			| Show_output _show -> failwith "TODO"
-		) |> R.map (fun event -> Some (Event.Job_event (id, event)))
-	) |> Option.default (Error (Sexp.Atom "No such job")))
+		) |> Lwt.map (R.map (fun event -> Some (Event.Job_event (id, event))))
+	) |> Option.default (Lwt.return (Error (Sexp.Atom "No such job")))
