@@ -1,7 +1,7 @@
 (* -*- tuareg -*- *)
 (* vim: syntax=ocaml
  *)
-(* psuedo-module to dynamically install vaious files from ../ *)
+(* psuedo-module to dynamically install various files from ../ *)
 let () =
 	let root = ".." in
 	let dirs = [
@@ -9,8 +9,12 @@ let () =
 	] in
 	let file_list = dirs |> List.map (fun dir ->
 		let prefix = Filename.concat root dir in
-		Sys.readdir prefix |> Array.to_list |> List.map (Filename.concat prefix)
-	) |> List.concat in
+		Sys.readdir prefix |> Array.to_list |> List.map (fun file ->
+			Printf.sprintf "(%s as %s)"
+				(Filename.concat prefix file)
+				(Filename.concat dir file)
+		)
+	) |> List.concat |> List.sort compare in
 	[
 		"(install";
 			"(section share)";
@@ -18,4 +22,4 @@ let () =
 			] @ file_list @ [
 			")";
 		")";
-	] |> String.concat "\n" |> Jbuild_plugin.V1.send
+	] |> String.concat "\n" |> (fun x -> print_endline x; Jbuild_plugin.V1.send x)
