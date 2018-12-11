@@ -4,9 +4,23 @@ module R = Rresult_ext
 open Astring
 open Sexplib
 open Sexplib.Conv
-module Log = (val (Logs.src_log (Logs.Src.create "server_job")))
-module StringMap = Map.Make(String)
 open Job
+
+module Log = (val (Logs.src_log (Logs.Src.create "server_job")))
+module StringMap = struct
+	include Map.Make(String)
+	let build : ('a -> key * 'b) -> 'a list -> 'b t = fun fn items ->
+		List.fold_left (fun map item ->
+			let k,v = fn item in
+			add k v map
+		) empty items
+
+	let build_keyed : ('a -> key) -> 'a list -> 'a t = fun fn items ->
+		List.fold_left (fun map item ->
+			let k = fn item in
+			add k item map
+		) empty items
+end
 
 let devnull = Unix.(openfile "/dev/null" [O_RDONLY; O_CLOEXEC]) 0o600
 
@@ -19,13 +33,19 @@ type job_execution = {
 	termination: int option Lwt.t sexp_opaque;
 } [@@deriving sexp_of]
 
+let id_of_job_execution ex = ex.job_id
+
 (* a server's representation of a (possibly executing) job *)
 type job = {
 	job_configuration: Server_config.job_configuration;
 	execution: job_execution option;
 } [@@deriving sexp_of]
 
-type state = job list
+type state = job StringMap.t (* [@@deriving sexp_of] *)
+let sexp_of_state = fun map ->
+	Sexp.List (map |> StringMap.bindings |> List.map (fun (_, v) ->
+		sexp_of_job v
+	))
 
 (* serialized to CONFIG_DIR/<job-id>.status *)
 type pid_status = {
@@ -99,28 +119,24 @@ let load_state config state_dir =
 			}
 		) in
 
-		(* Make a map of (ref config, ref running_job) *)
-		let job_map = config.Server_config.jobs |> List.fold_left (fun map job_conf ->
-			StringMap.add (job_conf.Server_config.job.Job.id) (Some job_conf, None) map
-		) StringMap.empty in
+		(* Make a map of job configs first *)
+		let job_map = config.Server_config.jobs
+			|> StringMap.build_keyed Server_config.id_of_job_configuration in
 
-		let job_map = executions |> List.fold_left (fun map job ->
-			let record = match StringMap.find_opt job.job_id map with
-				| Some (conf, _) -> (conf, Some job)
-				| None -> (None, Some job)
-			in
-			StringMap.add job.job_id record map
+		(* then merge it with executions *)
+		let execution_map = executions |> StringMap.build_keyed id_of_job_execution in
+		let server_jobs = StringMap.mapi (fun id conf ->
+			{
+				job_configuration = conf;
+				execution = StringMap.find_opt id execution_map;
+			}
 		) job_map in
 
-		let server_jobs = StringMap.fold (fun _key value jobs ->
-			match value with
-				| None, None -> jobs (* can't actually happen *)
-				| None, Some job ->
-						Log.warn (fun m->m"Running job has no corresponding configuration: %s" job.job_id);
-						jobs
-				| Some conf, execution ->
-					{ job_configuration = conf; execution } :: jobs
-		) job_map [] in
+		execution_map |> StringMap.iter (fun id _ ->
+			if not (StringMap.mem id server_jobs) then
+				Log.warn (fun m->m"Running job has no corresponding configuration, ignoring: %s" id);
+		);
+
 		server_jobs
 	)
 
@@ -165,7 +181,7 @@ let start ~state_dir job = (
 )
 
 let invoke : state -> Job.command -> Event.event option R.std_result Lwt.t = fun jobs (id, cmd) ->
-	let job = jobs |> List.find_opt (fun job -> job.job_configuration.job.id = id) in
+	let job = jobs |> StringMap.find_opt id in
 	job |> Option.map (fun job ->
 		(* TODO: update job status in case it's changed behind us? *)
 		(match cmd with

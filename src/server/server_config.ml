@@ -5,8 +5,11 @@ open Sexplib.Std
 
 type job_configuration = {
 	job: Job.job_identity;
+	sort_order: int;
 	command: string list;
 } [@@deriving sexp]
+
+let id_of_job_configuration job = job.job.Job.id
 
 type music_configuration = {
 	mpris_priority: string list;
@@ -29,11 +32,12 @@ let parse_cmd cmd : string list R.std_result = cmd |> List.map (function
 ) |> R.collect
 
 let parse_jobs jobs =
-	jobs |> List.map (fun job -> match job with
+	jobs |> List.mapi (fun sort_order job -> match job with
 		| List [Atom id; Atom name; List command] ->
 				parse_cmd command |> R.map (fun command ->
 					{
 						job = Job.{ id; name };
+						sort_order;
 						command;
 					}
 				)
