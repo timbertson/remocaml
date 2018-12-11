@@ -49,6 +49,10 @@ let or_ alt opt = match opt with
 
 let some x = Some x
 
+let fold default fn = function
+	| None -> default
+	| Some x -> fn x
+
 let is_some = function Some _ -> true | None -> false
 let is_none = function Some _ -> false | None -> true
 let get default = function Some x -> x | None -> default
