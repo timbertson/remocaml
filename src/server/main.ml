@@ -104,7 +104,7 @@ let handler ~config ~state ~static_cache ~static_root = fun conn req body ->
 			let%lwt command = body |> Cohttp_lwt.Body.to_string in
 			let command = command |> R.wrap (Event.command_of_sexp % Sexp.of_string) in
 			let%lwt response = command |> R.bind_lwt (fun command ->
-				Server_state.invoke !state command
+				Server_state.invoke state command
 			) in
 			let (status, body) = match response with
 				| Ok event ->
