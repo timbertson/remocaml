@@ -12,13 +12,14 @@ pre {
 	text-align: left;
 }
 
-.music-button, .global-button, .volume-button {
+.music-button, .global-button, .volume-button, .button {
 	cursor:pointer;
+	display: inline-block;
+	@extend %fa-icon;
+	@extend .fas;
 }
 
 .music-button {
-	@extend %fa-icon;
-	@extend .fas;
 	font-size:1.8em;
 	background: rgb(87, 131, 197);
 	color:white;
@@ -60,8 +61,6 @@ pre {
 }
 
 .volume-button {
-	@extend %fa-icon;
-	@extend .fas;
 	padding: 0 7px;
 	position: absolute;
 	top: 5px;
@@ -178,8 +177,6 @@ pre {
 }
 
 .global-button {
-	@extend %fa-icon;
-	@extend .fas;
 	position: absolute;
 	top: 10px;
 	right: 10px;
@@ -214,6 +211,13 @@ pre {
 	background-color: #eee;
 }
 
+.job-card {
+	.button {
+		width: 2em;
+		height: 2em;
+		border: 2px solid red;
+	}
+}
 
 .job {
 	//padding: 0 1em;

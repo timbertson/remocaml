@@ -60,14 +60,14 @@ let parse_config conf = function
 let accum_config conf directive = R.bind conf (fun conf -> parse_config conf directive)
 
 let load ~state_dir path =
-	let load_file () =
+	let load_file path =
 		try
 			Sexp.load_sexps path
 		with
 			| Unix.Unix_error (Unix.ENOENT, _, _)
 			| Sys_error _ -> []
 	in
-	R.bind (R.catch_exn load_file) (fun config ->
+	R.bind (R.wrap load_file path) (fun config ->
 		let initial_config = {
 			state_directory = state_dir;
 			config_path = path;

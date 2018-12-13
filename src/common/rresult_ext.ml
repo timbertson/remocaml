@@ -9,24 +9,23 @@ type 'a std_result = ('a, Sexplib.Sexp.t) result
 
 let sexp_of_error e = List [Atom "Error"; e]
 
-let sexp_of_result = function
-	| Ok s -> List [Atom "Ok"; s]
-	| Error s -> sexp_of_error s
-
-let result_of_sexp = function
-	| List [Atom "Ok"; s] -> Ok s
-	| List [Atom "Error"; s] -> Error s
-	| other -> Error (List [Atom "No_variant_match"; other])
-
-let catch_exn : 'a. (unit -> 'a) -> ('a, Sexp.t) result = fun f ->
-	try Ok (f ())
-	with err ->
-		Error (Conv.sexp_of_exn err)
+let prefix_error str = reword_error (fun err ->
+	Sexp.List [Sexp.Atom str; err]
+)
 
 let wrap : 'a 'b. ('a -> 'b) -> 'a -> ('b, Sexp.t) result = fun f arg ->
 	try Ok (f arg)
 	with err ->
 		Error (Conv.sexp_of_exn err)
+
+let sexp_of_result sexp_of__a = function
+	| Ok a -> List [Atom "Ok"; (sexp_of__a a)]
+	| Error e -> sexp_of_error e
+
+let result_of_sexp a_of_sexp = function
+	| List [Atom "Ok"; a] -> wrap a_of_sexp a
+	| List [Atom "Error"; e] -> Error e
+	| other -> Error (Conv.of_sexp_error "result_of_sexp" other)
 
 let wrap_lwt : 'a 'b. ('a -> 'b Lwt.t) -> 'a -> ('b, Sexp.t) result Lwt.t = fun f arg ->
 	try%lwt

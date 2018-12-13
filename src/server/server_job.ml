@@ -93,10 +93,14 @@ let update_process_state pid = let open Job in function
 let log_filename ~state ~job_id =
 	Filename.concat state.dir (job_id ^ ".out")
 
-let open_readable path = Unix.openfile path Unix.[O_RDONLY; O_CLOEXEC] 0o600
-let open_writeable path = Unix.openfile path Unix.[O_WRONLY; O_TRUNC; O_CLOEXEC] 0o600
+let open_readable path =
+	Unix.openfile path Unix.[O_RDONLY; O_CLOEXEC] 0o600
+
+let open_writeable path =
+	Unix.openfile path Unix.[O_WRONLY; O_CREAT; O_TRUNC; O_CLOEXEC] 0o600
 
 let load_state config state_dir : state R.std_result =
+	Unix_ext.mkdir_p state_dir;
 	R.wrap Sys.readdir state_dir |> R.map (fun files ->
 		(* TODO: delete old files! *)
 		let pid_states = files |> Array.to_list |> List.filter_map (fun filename ->
@@ -172,16 +176,20 @@ let start ~state job = (
 	) |> R.bindr (fun () ->
 		let config = job.job_configuration in
 		let log_filename = log_filename ~state ~job_id:config.job.id in
-		let log_file = open_writeable log_filename in
-		R.wrap (Unix.create_process "todo" [|"todo"|] devnull log_file) log_file
-		|> R.map (fun pid ->
-			Some (Job_executing {
-				job_id = config.job.id;
-				pid = pid;
-				ex_state = Running;
-				stdout = None;
-				termination = watch_termination pid;
-			})
+		R.wrap open_writeable log_filename
+			|> R.prefix_error ("Can't open job output file")
+			|> R.bindr (fun log_file ->
+			let argv = config.command in
+			R.wrap (Unix.create_process (List.hd argv) (Array.of_list argv) devnull log_file) log_file
+			|> R.map (fun pid ->
+				Some (Job_executing {
+					job_id = config.job.id;
+					pid = pid;
+					ex_state = Running;
+					stdout = None;
+					termination = watch_termination pid;
+				})
+			)
 		)
 	)
 )

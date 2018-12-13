@@ -1,5 +1,4 @@
 open Remo_common
-open Util
 module R = Rresult_ext
 open Sexplib
 open Sexplib.Std
@@ -32,7 +31,7 @@ let eq : t -> t -> bool = fun a b ->
 		~log:(use (=))
 
 type event_result = (Event.event, Sexp.t) R.result
-let sexp_of_event_result = R.sexp_of_result % (R.map Event.sexp_of_event)
+let sexp_of_event_result = R.sexp_of_result Event.sexp_of_event
 
 type event =
 	| Reconnect

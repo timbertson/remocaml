@@ -73,23 +73,22 @@ let view_job _instance =
 	fun { job; state = state } -> (
 		let button = button job.id in
 		card ~header:job.name ~cls:["text-white"; "bg-secondary"; "job-card"] (
-			state |> Option.map (fun state ->
-				let start_or_stop = match state.process_state with
-					| Running -> button "stop" Stop
-					| Exited _ -> button "run" Start
-				in
+			let start_or_stop = match state |> Option.map (fun state -> state.process_state) with
+				| None | Some (Exited _) -> button "run" Start
+				| Some Running -> button "stop" Stop
+			in
+			[ start_or_stop ] @ (state |> Option.fold [] (fun state ->
 				let output_shown = state.output |> Option.is_some in
 				let output_display = state.output |> Option.map (function
 					| [] -> text "(no output)"
 					| output -> div (output |> List.map text)
 				) |> Option.default empty in
 				[
-					start_or_stop;
 					button "list" (Show_output (not output_shown));
 					button "refresh" Refresh;
 					output_display;
 				]
-			) |> Option.default []
+			))
 		)
 	)
 

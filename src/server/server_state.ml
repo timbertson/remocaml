@@ -13,13 +13,7 @@ type state = {
 } [@@deriving sexp_of]
 
 let ensure_config_dir config =
-	let rec ensure_exists dir =
-		try let _:Unix.stats = Unix.stat dir in ()
-		with Unix.Unix_error (Unix.ENOENT, _, _) -> (
-			ensure_exists (Filename.dirname dir);
-			Unix.mkdir dir 0o700
-		) in
-	ensure_exists config.Server_config.state_directory;
+	Unix_ext.mkdir_p config.Server_config.state_directory;
 	config.Server_config.state_directory
 
 let load config =

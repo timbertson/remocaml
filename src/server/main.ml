@@ -87,10 +87,10 @@ let handler ~config ~state ~static_cache ~static_root = fun conn req body ->
 				])
 			in
 
+			(* TODO: merge in job events *)
+
 			let response = Lwt_stream.choose [events; dbus_events] |> Lwt_stream.map (fun event ->
-				event |> R.map Event.sexp_of_event
-				|> R.sexp_of_result
-				|> fun s ->
+				event |> R.sexp_of_result Event.sexp_of_event |> fun s ->
 					Log.debug (fun m->m "emitting: %s" (Sexp.to_string s));
 					"data: " ^ (Sexp.to_string s) ^ "\n\n"
 			) in
@@ -106,6 +106,9 @@ let handler ~config ~state ~static_cache ~static_root = fun conn req body ->
 			let%lwt response = command |> R.bind_lwt (fun command ->
 				Server_state.invoke state command
 			) in
+			Log.debug (fun m->
+				let result_s = R.sexp_of_result (Conv.sexp_of_option Event.sexp_of_event) response in
+				m"/invoke response: %s" (Sexp.to_string result_s));
 			let (status, body) = match response with
 				| Ok event ->
 						event |> Option.may (Connections.broadcast);
