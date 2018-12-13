@@ -37,7 +37,7 @@ let client_state state =
 					let open Server_job in
 					let open Server_config in
 					compare a.job_configuration.sort_order b.job_configuration.sort_order
-				) |> List.map Server_job.running_client_job;
+				) |> List.map Server_job.external_of_job;
 		};
 	})
 

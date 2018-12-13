@@ -63,12 +63,25 @@ type internal_event =
 	| External of Job.job_event
 	| Job_executing of job_execution
 
+let external_of_job job =
+	Job.({
+		job = job.job_configuration.Server_config.job;
+		state = job.execution |> Option.map (fun execution ->
+			{
+				process_state = execution.ex_state;
+				output = None; (* TODO *)
+			}
+		)
+	})
+
 let update_internal : state:state -> string -> internal_event -> (jobs * Event.event) option
 	= fun ~state id -> function
 		| External event -> Some (state.jobs, Job_event (id, event))
-		| Job_executing _execution ->
-				(* TODO *)
-				None
+		| Job_executing execution ->
+				Some (
+					state.jobs,
+					Job_event (id, Process_state (execution.ex_state))
+				)
 
 let watch_termination pid =
 	let open Lwt_unix in
@@ -149,17 +162,6 @@ let load_state config state_dir : state R.std_result =
 
 		{ dir = state_dir; jobs }
 	)
-
-let running_client_job job =
-	Job.({
-		job = job.job_configuration.Server_config.job;
-		state = job.execution |> Option.map (fun execution ->
-			{
-				process_state = execution.ex_state;
-				output = None; (* TODO *)
-			}
-		)
-	})
 
 let stop job =
 	job.execution |> Option.map (function { ex_state; pid; _ } ->
