@@ -4,6 +4,9 @@ open Sexp
 
 type ('a,'b) result = ('a,'b) Pervasives.result (* alias for compatibility with sexp_conv *)
 
+(* handy alias *)
+type 'a std_result = ('a, Sexplib.Sexp.t) result
+
 let sexp_of_error e = List [Atom "Error"; e]
 
 let sexp_of_result = function

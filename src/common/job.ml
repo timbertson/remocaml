@@ -33,7 +33,6 @@ type command = id * job_command
 	[@@deriving sexp]
 
 type job_event =
-	| Job_running of bool
 	| Process_state of process_state
 	| Job_state of job_state option
 	[@@deriving sexp]

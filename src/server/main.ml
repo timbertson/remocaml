@@ -78,7 +78,7 @@ let handler ~config ~state ~static_cache ~static_root = fun conn req body ->
 			] in
 			let events = Connections.add_event_stream conn (reconnect_events @ initialize_state) in
 
-			let dbus_events: (Event.event, Sexp.t) result Lwt_stream.t =
+			let dbus_events: Event.event R.std_result Lwt_stream.t =
 				let open Server_music in
 				let peers = (!state).Server_state.server_music_state.peers in
 				Lwt_stream.choose (List.filter_map identity [
@@ -104,10 +104,12 @@ let handler ~config ~state ~static_cache ~static_root = fun conn req body ->
 			let%lwt command = body |> Cohttp_lwt.Body.to_string in
 			let command = command |> R.wrap (Event.command_of_sexp % Sexp.of_string) in
 			let%lwt response = command |> R.bind_lwt (fun command ->
-				Server_state.invoke !state command
+				Server_state.invoke state command
 			) in
 			let (status, body) = match response with
-				| Ok () -> (`OK, "")
+				| Ok event ->
+						event |> Option.may (Connections.broadcast);
+						(`OK, "")
 				| Error err -> (`Internal_server_error, Sexp.to_string (R.sexp_of_error err))
 			in
 			let headers = Header.add_list (Header.init ()) [

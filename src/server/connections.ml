@@ -1,15 +1,14 @@
-open Sexplib
 open Remo_common
+module R = Rresult_ext
 module Log = (val (Logs.src_log (Logs.Src.create "connections")))
 
 (* for consistency, we maintain a single event stream which
  * gets replicated to every open connection *)
 
-type push_fn = (Event.event, Sexp.t) result option -> unit
+type push_fn = Event.event R.std_result option -> unit
 type conn = Cohttp_lwt_unix.Server.conn
 
 let conns : (conn * push_fn) list ref = ref []
-
 
 module Timeout = struct
 	let ephemeral = ref false
@@ -50,4 +49,4 @@ let add_event_stream conn initial_events =
 	stream
 
 let broadcast event =
-	!conns |> List.iter (fun (_conn, push) -> push (Some event))
+	!conns |> List.iter (fun (_conn, push) -> push (Some (Ok event)))
