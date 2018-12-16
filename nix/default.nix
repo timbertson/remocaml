@@ -11,6 +11,16 @@ let extraSpecs = opam2nix.toSpecs extraPackages; in
 	ocamlAttr = "ocaml-ng.ocamlPackages_4_06.ocaml";
 	overrides = { super, self }: {
 		opamPackages = super.opamPackages // {
+			conduit-lwt-unix = super.opamPackages.conduit-lwt-unix // {
+				"1.3.0" = super.opamPackages.conduit-lwt-unix."1.3.0".overrideAttrs (o: {
+					src = pkgs.fetchFromGitHub {
+						owner = "timbertson";
+						repo = "ocaml-conduit";
+						rev = "77ec09c5bc31264e1f5040f66c4008dd898885a3";
+						sha256="0d1jksr6cfhjbf0h5hdc3qiv4irjmq27r2bgvppccdq3330pfnyx";
+					};
+				});
+			};
 			# logs = super.opamPackages.logs // {
 			# 	"0.6.2" = super.opamPackages.logs."0.6.2".overrideAttrs (o: {
 			# 		buildPhase = ''

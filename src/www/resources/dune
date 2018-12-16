@@ -22,4 +22,4 @@ let () =
 			] @ file_list @ [
 			")";
 		")";
-	] |> String.concat "\n" |> (fun x -> print_endline x; Jbuild_plugin.V1.send x)
+	] |> String.concat "\n" |> Jbuild_plugin.V1.send
