@@ -40,6 +40,7 @@ type job = {
 	job_configuration: Server_config.job_configuration;
 	execution: job_execution option;
 } [@@deriving sexp_of]
+let id_of_job job = Server_config.id_of_job_configuration job.job_configuration
 
 type jobs = job StringMap.t (* [@@deriving sexp_of] *)
 let sexp_of_jobs = fun map ->
@@ -53,11 +54,30 @@ type state = {
 } [@@deriving sexp_of]
 
 
-(* serialized to CONFIG_DIR/<job-id>.status *)
+let log_ext = "out"
+let state_ext = "state"
+let log_filename ~state ~job_id =
+	Filename.concat state.dir (job_id ^ "." ^ log_ext)
+
+let state_filename ~state ~job_id =
+	Filename.concat state.dir (job_id ^ "." ^ state_ext)
+
+let open_readable path =
+	Unix.openfile path Unix.[O_RDONLY; O_CLOEXEC] 0o600
+
+let open_writeable path =
+	Unix.openfile path Unix.[O_WRONLY; O_CREAT; O_TRUNC; O_CLOEXEC] 0o600
+
+(* serialized to CONFIG_DIR/<job-id>.state *)
 type pid_status = {
 	ps_pid: int;
 	ps_state: Job.process_state;
 } [@@deriving sexp]
+
+let pid_status_of_job job = job.execution |> Option.map (fun ex -> {
+	ps_pid = ex.pid;
+	ps_state = ex.ex_state;
+})
 
 type internal_event =
 	| External of Job.job_event
@@ -66,22 +86,52 @@ type internal_event =
 let external_of_job job =
 	Job.({
 		job = job.job_configuration.Server_config.job;
-		state = job.execution |> Option.map (fun execution ->
-			{
-				process_state = execution.ex_state;
-				output = None; (* TODO *)
-			}
-		)
+		state = job.execution |> Option.map (fun execution -> execution.ex_state);
+		output = None; (* TODO *)
 	})
 
-let update_internal : state:state -> string -> internal_event -> (jobs * Event.event) option
-	= fun ~state id -> function
-		| External event -> Some (state.jobs, Job_event (id, event))
+let update_pid_status ~state job =
+	let path = state_filename ~state ~job_id:(id_of_job job) in
+	match pid_status_of_job job with
+		| None -> Unix_ext.ensure_unlinked path
+		| Some status ->
+			let tmp = path ^ ".tmp" in
+			let contents = Sexp.to_string (sexp_of_pid_status status) |> Bytes.of_string in
+			let f = open_writeable tmp in
+			let () = try
+				let _:int = Unix.write f contents 0 (Bytes.length contents) in
+				Unix.close f;
+			with e -> (
+				Unix.close f; raise e
+			) in
+			Unix.rename tmp path
+
+let update_internal : state:state -> job -> internal_event -> (jobs * Event.event)
+	= fun ~state job event ->
+	let update_status job =
+		update_pid_status ~state job;
+		job
+	in
+
+	let job, event = match event with
+		| External event ->
+			let update_ex_state job ex_state =
+				update_status ({ job with
+					execution = job.execution |> Option.map (fun ex -> { ex with ex_state })
+				})
+			in
+			(match event with
+				| Process_state ex_state as event ->
+					(update_ex_state job ex_state, event)
+			)
+
 		| Job_executing execution ->
-				Some (
-					state.jobs,
-					Job_event (id, Process_state (execution.ex_state))
-				)
+			let job = { job with execution = Some execution } in
+			(update_status job, Process_state (execution.ex_state))
+	in
+	let id = id_of_job job in
+	let jobs = StringMap.add id job state.jobs in
+	(jobs, Job_event (id, event))
 
 let watch_termination pid =
 	let open Lwt_unix in
@@ -103,22 +153,13 @@ let update_process_state pid = let open Job in function
 	| Exited _ as state -> state
 	| Running -> if is_running pid then Running else Exited None
 
-let log_filename ~state ~job_id =
-	Filename.concat state.dir (job_id ^ ".out")
-
-let open_readable path =
-	Unix.openfile path Unix.[O_RDONLY; O_CLOEXEC] 0o600
-
-let open_writeable path =
-	Unix.openfile path Unix.[O_WRONLY; O_CREAT; O_TRUNC; O_CLOEXEC] 0o600
-
 let load_state config state_dir : state R.std_result =
 	Unix_ext.mkdir_p state_dir;
 	R.wrap Sys.readdir state_dir |> R.map (fun files ->
-		(* TODO: delete old files! *)
+		(* TODO: delete old files? *)
 		let pid_states = files |> Array.to_list |> List.filter_map (fun filename ->
 			match String.cut ~rev:true ~sep:"." filename with
-				| Some (job_id, "status") ->
+				| Some (job_id, ext) when ext = state_ext ->
 						let full_path = Filename.concat state_dir filename in
 						Some (full_path |> R.wrap (fun path ->
 							(job_id, pid_status_of_sexp (Sexp.load_sexp ~strict:true path))
@@ -168,7 +209,7 @@ let stop job =
 		match ex_state with
 			| Exited _ as ex -> Ok (Some (Process_state ex))
 			| Running -> R.wrap (Unix.kill pid) Sys.sigint |> R.map (fun () -> None)
-	) |> Option.default (Ok (Some (Job_state None)))
+	) |> Option.default (Ok None)
 
 let start ~state job = (
 	job.execution |> Option.fold (Ok ()) (function { ex_state; _ } ->
@@ -205,7 +246,7 @@ let invoke : state -> Job.command -> (jobs * Event.event) option R.std_result = 
 			| Stop -> stop job |> R.map (Option.map (fun x -> External x))
 			| Refresh -> failwith "TODO"
 			| Show_output _show -> failwith "TODO"
-		) |> R.map (Option.bind (fun internal_event ->
-			update_internal ~state id internal_event
+		) |> R.map (Option.map (fun internal_event ->
+			update_internal ~state job internal_event
 		))
 	) |> Option.default (Error (Sexp.Atom "No such job"))

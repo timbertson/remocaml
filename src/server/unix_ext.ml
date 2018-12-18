@@ -7,3 +7,9 @@ let rec mkdir_p path =
 		| Unix_error (ENOENT, _, _) ->
 			mkdir_p (Filename.dirname path);
 			mkdir_p path
+
+let ensure_unlinked path =
+	try
+		unlink path
+	with Unix_error (ENOENT, _, _) -> ()
+	

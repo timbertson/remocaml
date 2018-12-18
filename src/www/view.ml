@@ -70,25 +70,26 @@ let view_job _instance =
 		a_class ("button rounded-circle job-"^icon);
 		a_onclick (emitter (Invoke (Job_command (id, action))));
 	] [] in
-	fun { job; state = state } -> (
+	fun { job; state; output } -> (
 		let button = button job.id in
 		card ~header:job.name ~cls:["text-white"; "bg-secondary"; "job-card"] (
-			let start_or_stop = match state |> Option.map (fun state -> state.process_state) with
+			let start_or_stop = match state with
 				| None | Some (Exited _) -> button "run" Start
 				| Some Running -> button "stop" Stop
 			in
-			[ start_or_stop ] @ (state |> Option.fold [] (fun state ->
-				let output_shown = state.output |> Option.is_some in
-				let output_display = state.output |> Option.map (function
+			let output_shown, output_display = output |> Option.fold
+				(false, empty)
+				(fun output -> (true, match output with
 					| [] -> text "(no output)"
-					| output -> div (output |> List.map text)
-				) |> Option.default empty in
-				[
-					button "list" (Show_output (not output_shown));
-					button "refresh" Refresh;
-					output_display;
-				]
-			))
+					| output -> div (output |> List.map text))
+				)
+			in
+			[
+				start_or_stop;
+				button "list" (Show_output (not output_shown));
+				button "refresh" Refresh;
+				output_display;
+			]
 		)
 	)
 
