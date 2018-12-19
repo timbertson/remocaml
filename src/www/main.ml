@@ -17,8 +17,7 @@ let component ~show_debug ~fake tasks =
 			let event: Event.event R.std_result =
 				data
 					|> R.wrap Sexp.of_string
-					|> R.bindr R.result_of_sexp
-					|> R.bindr (R.wrap Event.event_of_sexp)
+					|> R.bindr (R.result_of_sexp Event.event_of_sexp)
 			in
 			Ui.emit instance (Ui_state.Server_event event);
 			Js._true
