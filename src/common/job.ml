@@ -31,6 +31,7 @@ type command = id * job_command
 
 type job_event =
 	| Process_state of process_state
+	| Output_line of string
 	[@@deriving sexp]
 
 type event = id * job_event
@@ -53,6 +54,9 @@ let modify_list_item modifier items =
 let update state (id, event) =
 	let modifier = match event with
 		| Process_state state -> fun job -> { job with state = Some state }
+		| Output_line line -> fun job -> { job with
+			output = job.output |> Option.map (fun o -> o @ [line])
+		}
 	in
 	{ jobs = state.jobs |> modify_list_item (fun job ->
 		if job.job.id = id then Some (modifier job) else None

@@ -5,6 +5,7 @@ open Astring
 open Sexplib
 open Sexplib.Conv
 open Job
+open React
 
 module Log = (val (Logs.src_log (Logs.Src.create "server_job")))
 module StringMap = struct
@@ -31,6 +32,7 @@ type job_execution = {
 	ex_state: Job.process_state;
 	stdout : string Lwt_stream.t option sexp_opaque;
 	termination: int option Lwt.t sexp_opaque;
+	output_watch: unit Lwt.t option sexp_opaque;
 } [@@deriving sexp_of]
 
 let id_of_job_execution ex = ex.job_id
@@ -51,6 +53,8 @@ let sexp_of_jobs = fun map ->
 type state = {
 	jobs: jobs;
 	dir: string;
+	events: Event.event R.std_result E.t sexp_opaque;
+	emit: (Job.event R.std_result -> unit) sexp_opaque;
 } [@@deriving sexp_of]
 
 
@@ -110,10 +114,10 @@ let update_internal : state:state -> job -> internal_event -> (jobs * Event.even
 	= fun ~state job event ->
 	let update_status job =
 		update_pid_status ~state job;
-		job
+		Some job
 	in
 
-	let job, event = match event with
+	let updated_job, event = match event with
 		| External event ->
 			let update_ex_state job ex_state =
 				update_status ({ job with
@@ -123,6 +127,8 @@ let update_internal : state:state -> job -> internal_event -> (jobs * Event.even
 			(match event with
 				| Process_state ex_state as event ->
 					(update_ex_state job ex_state, event)
+				| Output_line _ as event ->
+					(None, event)
 			)
 
 		| Job_executing execution ->
@@ -130,7 +136,10 @@ let update_internal : state:state -> job -> internal_event -> (jobs * Event.even
 			(update_status job, Process_state (execution.ex_state))
 	in
 	let id = id_of_job job in
-	let jobs = StringMap.add id job state.jobs in
+	
+	let jobs = updated_job |> Option.fold state.jobs (fun job ->
+		StringMap.add id job state.jobs
+	) in
 	(jobs, Job_event (id, event))
 
 let watch_termination pid =
@@ -140,6 +149,26 @@ let watch_termination pid =
 		| WEXITED code -> Some code
 		| WSIGNALED _ | WSTOPPED _ -> Some 127
 	)
+
+let watch_output ~id ~emit filename =
+	let%lwt channel = Lwt_io.(open_file ~mode:Input filename) in
+	Log.debug(fun m->m"watching output file: %s" filename);
+	let rec read () =
+		Lwt.bind (Lwt_io.read_line_opt channel) (fun line ->
+			Log.debug(fun m->m"saw %s for job %s" (if Option.is_some line then "line" else "EOF") id);
+			match line with
+				| Some line ->
+					emit (Ok (id, Output_line line));
+					read ()
+				| None -> Lwt.return_unit
+		)
+	in
+	(try%lwt
+		read ()
+	with e -> raise e
+	) [%lwt.finally
+		Lwt_io.close channel
+	]
 
 let is_running pid =
 	let open Unix in
@@ -180,6 +209,7 @@ let load_state config state_dir : state R.std_result =
 				ex_state = update_process_state st.ps_pid st.ps_state;
 				stdout = None;
 				termination = watch_termination st.ps_pid;
+				output_watch = None;
 			}
 		) in
 
@@ -201,7 +231,12 @@ let load_state config state_dir : state R.std_result =
 				Log.warn (fun m->m"Running job has no corresponding configuration, ignoring: %s" id);
 		);
 
-		{ dir = state_dir; jobs }
+		let events, emit = E.create () in
+		let emit = fun e -> e |> R.map (fun e -> Event.Job_event e) |> emit in
+		{
+			dir = state_dir;
+			jobs; events; emit
+		}
 	)
 
 let stop job =
@@ -223,16 +258,20 @@ let start ~state job = (
 			|> R.prefix_error ("Can't open job output file")
 			|> R.bindr (fun log_file ->
 			let argv = config.command in
-			R.wrap (Unix.create_process (List.hd argv) (Array.of_list argv) devnull log_file) log_file
-			|> R.map (fun pid ->
-				Some (Job_executing {
-					job_id = config.job.id;
-					pid = pid;
-					ex_state = Running;
-					stdout = None;
-					termination = watch_termination pid;
-				})
-			)
+			let result = R.wrap (Unix.create_process (List.hd argv) (Array.of_list argv) devnull log_file) log_file
+				|> R.map (fun pid ->
+					Some (Job_executing {
+						job_id = config.job.id;
+						pid = pid;
+						ex_state = Running;
+						stdout = None;
+						termination = watch_termination pid;
+						output_watch = Some (watch_output ~id:config.job.id ~emit:state.emit log_filename);
+					})
+				)
+			in
+			Unix.close log_file;
+			result
 		)
 	)
 )

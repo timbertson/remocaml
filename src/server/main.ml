@@ -87,9 +87,12 @@ let handler ~config ~state ~static_cache ~static_root = fun conn req body ->
 				])
 			in
 
-			(* TODO: merge in job events *)
+			let job_events: Event.event R.std_result Lwt_stream.t =
+				let open Server_job in
+				Lwt_react.E.to_stream ((!state).Server_state.server_jobs.events)
+			in
 
-			let response = Lwt_stream.choose [events; dbus_events] |> Lwt_stream.map (fun event ->
+			let response = Lwt_stream.choose [events; dbus_events; job_events] |> Lwt_stream.map (fun event ->
 				event |> R.sexp_of_result Event.sexp_of_event |> fun s ->
 					Log.debug (fun m->m "emitting: %s" (Sexp.to_string s));
 					"data: " ^ (Sexp.to_string s) ^ "\n\n"

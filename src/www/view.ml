@@ -87,7 +87,6 @@ let view_job _instance =
 			[
 				start_or_stop;
 				button "list" (Show_output (not output_shown));
-				button "refresh" Refresh;
 				output_display;
 			]
 		)

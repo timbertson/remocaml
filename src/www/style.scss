@@ -216,6 +216,9 @@ pre {
 		width: 2em;
 		height: 2em;
 		border: 2px solid red;
+		&.job-run:before { content: fa-content($fa-var-play); }
+		&.job-stop:before { content: fa-content($fa-var-stop); }
+		&.job-lis:before { content: fa-content($fa-var-list); }
 	}
 }
 
