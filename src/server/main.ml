@@ -186,7 +186,11 @@ let getenv key =
 let () =
 	init_logs ();
 
-	let ephemeral = (try Unix.getenv "REMOCAML_EPHEMERAL" with Not_found -> "false") = "true" in
+	let ephemeral = match getenv "REMOCAML_EPHEMERAL" |> Option.default "false" with
+		| "false" -> None
+		| "true" -> Some(20)
+		| seconds -> Some(int_of_string seconds)
+	in
 	Connections.Timeout.set_ephemeral ephemeral;
 
 	let home = getenv "HOME" |> Option.force in

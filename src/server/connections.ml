@@ -11,7 +11,7 @@ type conn = Cohttp_lwt_unix.Server.conn
 let conns : (conn * push_fn) list ref = ref []
 
 module Timeout = struct
-	let ephemeral = ref false
+	let ephemeral = ref None
 	let set_ephemeral eph =
 		ephemeral := eph
 
@@ -23,9 +23,9 @@ module Timeout = struct
 		)
 
 	let start () =
-		if !ephemeral then (
-			Log.info (fun m->m"no remaining connections, timing out after 20s");
-			current := Some (Lwt_timeout.create 20 (fun () -> exit 1))
+		!ephemeral |> Option.may (fun timeout ->
+			Log.info (fun m->m"no remaining connections, timing out after %ds" timeout);
+			current := Some (Lwt_timeout.create timeout (fun () -> exit 1))
 		)
 end
 
