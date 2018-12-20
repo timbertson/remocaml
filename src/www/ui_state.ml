@@ -41,7 +41,10 @@ type event =
 
 let update state : event -> t = function
 	| Server_event (Error err) -> { state with error = Some err }
-	| Server_event (Ok evt) -> { state with server_state = Event.update state.server_state evt }
+	| Server_event (Ok evt) ->
+		let server_state = Event.update state.server_state evt in
+		Log.info(fun m->m"updated; server state = %s" (Sexp.to_string (State.sexp_of_state server_state)));
+		{ state with server_state = server_state }
 	| Reconnect | Invoke _ -> state
 
 let update state event = { (update state event) with log = match event with

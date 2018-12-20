@@ -126,6 +126,8 @@ let view ~show_debug instance =
 							div ~a:[a_class "log"] [
 								h3 [text "Log:"];
 								div [text log];
+								h3 [text "State:"];
+								div [text (Sexp.to_string (sexp_of_state server_state))];
 							];
 						]
 					)) |> Option.default empty

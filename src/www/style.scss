@@ -19,8 +19,7 @@ pre {
 	@extend .fas;
 }
 
-.music-button {
-	font-size:1.8em;
+.music-button, .job-card .button {
 	background: rgb(87, 131, 197);
 	color:white;
 	display:inline-block;
@@ -32,6 +31,11 @@ pre {
 	margin-top: 10px;
 	margin-bottom: 5px;
 }
+
+.music-button {
+	font-size:1.8em;
+}
+
 
 .music-play:before { content: fa-content($fa-var-play); }
 .music-pause:before { content: fa-content($fa-var-pause); }
@@ -213,12 +217,9 @@ pre {
 
 .job-card {
 	.button {
-		width: 2em;
-		height: 2em;
-		border: 2px solid red;
 		&.job-run:before { content: fa-content($fa-var-play); }
 		&.job-stop:before { content: fa-content($fa-var-stop); }
-		&.job-lis:before { content: fa-content($fa-var-list); }
+		&.job-list:before { content: fa-content($fa-var-list); }
 	}
 }
 

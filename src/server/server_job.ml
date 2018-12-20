@@ -30,9 +30,9 @@ type job_execution = {
 	job_id: string;
 	pid: int;
 	ex_state: Job.process_state;
-	stdout : string Lwt_stream.t option sexp_opaque;
 	termination: int option Lwt.t sexp_opaque;
 	output_watch: unit Lwt.t option sexp_opaque;
+	output_buffer: string list option;
 } [@@deriving sexp_of]
 
 let id_of_job_execution ex = ex.job_id
@@ -90,8 +90,8 @@ type internal_event =
 let external_of_job job =
 	Job.({
 		job = job.job_configuration.Server_config.job;
-		state = job.execution |> Option.map (fun execution -> execution.ex_state);
-		output = None; (* TODO *)
+		state = job.execution |> Option.map (fun ex -> ex.ex_state);
+		output = job.execution |> Option.bind (fun ex -> ex.output_buffer);
 	})
 
 let update_pid_status ~state job =
@@ -127,8 +127,16 @@ let update_internal : state:state -> job -> internal_event -> (jobs * Event.even
 			(match event with
 				| Process_state ex_state as event ->
 					(update_ex_state job ex_state, event)
-				| Output_line _ as event ->
-					(None, event)
+				| Output_line line as event ->
+					let line = [line] in
+					let job = { job with
+						execution = job.execution |> Option.map (fun ex -> { ex with output_buffer =
+							match ex.output_buffer with
+								| Some output -> Some (output @ line)
+								| None -> Some line
+						});
+					} in
+					(Some job, event)
 			)
 
 		| Job_executing execution ->
@@ -142,34 +150,6 @@ let update_internal : state:state -> job -> internal_event -> (jobs * Event.even
 	) in
 	(jobs, Job_event (id, event))
 
-let watch_termination pid =
-	let open Lwt_unix in
-	let%lwt (_pid, pid_status) = waitpid [] pid in
-	Lwt.return (match pid_status with
-		| WEXITED code -> Some code
-		| WSIGNALED _ | WSTOPPED _ -> Some 127
-	)
-
-let watch_output ~id ~emit filename =
-	let%lwt channel = Lwt_io.(open_file ~mode:Input filename) in
-	Log.debug(fun m->m"watching output file: %s" filename);
-	let rec read () =
-		Lwt.bind (Lwt_io.read_line_opt channel) (fun line ->
-			Log.debug(fun m->m"saw %s for job %s" (if Option.is_some line then "line" else "EOF") id);
-			match line with
-				| Some line ->
-					emit (Ok (id, Output_line line));
-					read ()
-				| None -> Lwt.return_unit
-		)
-	in
-	(try%lwt
-		read ()
-	with e -> raise e
-	) [%lwt.finally
-		Lwt_io.close channel
-	]
-
 let is_running pid =
 	let open Unix in
 	try
@@ -181,6 +161,68 @@ let is_running pid =
 let update_process_state pid = let open Job in function
 	| Exited _ as state -> state
 	| Running -> if is_running pid then Running else Exited None
+
+let watch_termination pid =
+	let open Lwt_unix in
+	let%lwt (_pid, pid_status) = waitpid [] pid in
+	Lwt.return (match pid_status with
+		| WEXITED code -> Some code
+		| WSIGNALED _ | WSTOPPED _ -> Some 127
+	)
+
+let output_delay_max = 10.0
+let output_delay_min = 0.5
+let output_delay_scale = 1.1
+
+let watch_output ~id ~termination ~emit filename =
+	let%lwt channel = Lwt_io.(open_file ~mode:Input filename) in
+	Log.debug(fun m->m"watching output file: %s" filename);
+	let buffer = Buffer.create 1024 in
+	let emit_line () =
+		let line = Buffer.contents buffer in
+		Buffer.clear buffer;
+		emit (Ok (id, Output_line line))
+	in
+	let rec read next_timeout =
+		Lwt.bind (Lwt_io.read_char_opt channel) (function
+			| Some '\n' ->
+					Log.debug(fun m->m"[%s] saw line" id);
+				emit_line ();
+				read None
+			| Some ch ->
+				Buffer.add_char buffer ch;
+				read None
+			| None ->
+				let read_after_delay t =
+					Log.debug(fun m->m"[%s] saw EOF, sleeping for %f seconds" id t);
+					let%lwt () = Lwt_unix.sleep t in
+					let t = min output_delay_max (t *. output_delay_scale) in
+					read (Some t)
+				in
+				(match next_timeout with
+					| None -> read_after_delay output_delay_min
+					| Some t ->
+						(* this isn't the first EOF, break if process has ended. This is an attempt
+						 * to avoid the race condition where we see the process end before we read the last byte *)
+						if Lwt.is_sleeping termination then
+							(* still running *)
+							read_after_delay t
+						else (
+							(* if there's a trailing line, emit it before stopping *)
+							if (Buffer.length buffer > 0) then (
+								emit_line ()
+							);
+							Lwt.return_unit
+						)
+				)
+		)
+	in
+	(try%lwt
+		read None
+	with e -> raise e
+	) [%lwt.finally
+		Lwt_io.close channel
+	]
 
 let load_state config state_dir : state R.std_result =
 	Unix_ext.mkdir_p state_dir;
@@ -203,13 +245,13 @@ let load_state config state_dir : state R.std_result =
 		);
 
 		let executions = pid_states |> List.map (fun (job_id, st) ->
+			let pid = st.ps_pid in
+			let termination = watch_termination pid in
 			{
-				job_id;
-				pid = st.ps_pid;
+				job_id; pid; termination;
 				ex_state = update_process_state st.ps_pid st.ps_state;
-				stdout = None;
-				termination = watch_termination st.ps_pid;
 				output_watch = None;
+				output_buffer = None;
 			}
 		) in
 
@@ -260,13 +302,14 @@ let start ~state job = (
 			let argv = config.command in
 			let result = R.wrap (Unix.create_process (List.hd argv) (Array.of_list argv) devnull log_file) log_file
 				|> R.map (fun pid ->
+					let termination = watch_termination pid in
 					Some (Job_executing {
 						job_id = config.job.id;
 						pid = pid;
 						ex_state = Running;
-						stdout = None;
-						termination = watch_termination pid;
-						output_watch = Some (watch_output ~id:config.job.id ~emit:state.emit log_filename);
+						termination;
+						output_watch = Some (watch_output ~id:config.job.id ~termination ~emit:state.emit log_filename);
+						output_buffer = Some [];
 					})
 				)
 			in

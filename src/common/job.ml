@@ -54,8 +54,9 @@ let modify_list_item modifier items =
 let update state (id, event) =
 	let modifier = match event with
 		| Process_state state -> fun job -> { job with state = Some state }
-		| Output_line line -> fun job -> { job with
-			output = job.output |> Option.map (fun o -> o @ [line])
+		| Output_line line -> fun job ->
+				Log.info(fun m->m"adding line (is currently %b)" (Option.is_some job.output));
+				{ job with output = job.output |> Option.map (fun o -> o @ [line])
 		}
 	in
 	{ jobs = state.jobs |> modify_list_item (fun job ->
