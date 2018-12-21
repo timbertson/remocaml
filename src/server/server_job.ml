@@ -192,6 +192,7 @@ let watch_output ~id ~termination ~emit filename =
 							if (Buffer.length buffer > 0) then (
 								emit_line ()
 							);
+							Log.debug("output_watch for %s terminated" id);
 							Lwt.return_unit
 						)
 				)
