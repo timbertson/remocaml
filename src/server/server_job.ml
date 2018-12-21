@@ -29,10 +29,8 @@ let devnull = Unix.(openfile "/dev/null" [O_RDONLY; O_CLOEXEC]) 0o600
 type job_execution = {
 	job_id: string;
 	pid: int;
-	ex_state: Job.process_state;
 	termination: int option Lwt.t sexp_opaque;
 	output_watch: unit Lwt.t option sexp_opaque;
-	output_buffer: string list option;
 } [@@deriving sexp_of]
 
 let id_of_job_execution ex = ex.job_id
@@ -40,6 +38,7 @@ let id_of_job_execution ex = ex.job_id
 (* a server's representation of a (possibly executing) job *)
 type job = {
 	job_configuration: Server_config.job_configuration;
+	external_job: Job.job;
 	execution: job_execution option;
 } [@@deriving sexp_of]
 let id_of_job job = Server_config.id_of_job_configuration job.job_configuration
@@ -75,28 +74,24 @@ let open_writeable path =
 (* serialized to CONFIG_DIR/<job-id>.state *)
 type pid_status = {
 	ps_pid: int;
-	ps_state: Job.process_state;
+	ps_state: Job.process_state option;
 } [@@deriving sexp]
 
 let pid_status_of_job job = job.execution |> Option.map (fun ex -> {
 	ps_pid = ex.pid;
-	ps_state = ex.ex_state;
+	ps_state = job.external_job.state;
 })
 
 type internal_event =
 	| External of Job.job_event
-	| Job_executing of job_execution
+	| Job_executing of (job_execution * Job.process_state)
 
-let external_of_job job =
-	Job.({
-		job = job.job_configuration.Server_config.job;
-		state = job.execution |> Option.map (fun ex -> ex.ex_state);
-		output = job.execution |> Option.bind (fun ex -> ex.output_buffer);
-	})
+let external_of_job job = job.external_job
 
-let update_pid_status ~state job =
-	let path = state_filename ~state ~job_id:(id_of_job job) in
-	match pid_status_of_job job with
+let update_pid_status ~state ~id status =
+	let path = state_filename ~state ~job_id:id in
+	Log.debug(fun m->m"updatin pid status at %s" path);
+	match status with
 		| None -> Unix_ext.ensure_unlinked path
 		| Some status ->
 			let tmp = path ^ ".tmp" in
@@ -110,45 +105,30 @@ let update_pid_status ~state job =
 			) in
 			Unix.rename tmp path
 
-let update_internal : state:state -> job -> internal_event -> (jobs * Event.event)
+let update_internal : state:state -> job -> internal_event -> (jobs * Event.event list)
 	= fun ~state job event ->
-	let update_status job =
-		update_pid_status ~state job;
-		Some job
-	in
-
-	let updated_job, event = match event with
-		| External event ->
-			let update_ex_state job ex_state =
-				update_status ({ job with
-					execution = job.execution |> Option.map (fun ex -> { ex with ex_state })
-				})
-			in
-			(match event with
-				| Process_state ex_state as event ->
-					(update_ex_state job ex_state, event)
-				| Output_line line as event ->
-					let line = [line] in
-					let job = { job with
-						execution = job.execution |> Option.map (fun ex -> { ex with output_buffer =
-							match ex.output_buffer with
-								| Some output -> Some (output @ line)
-								| None -> Some line
-						});
-					} in
-					(Some job, event)
-			)
-
-		| Job_executing execution ->
-			let job = { job with execution = Some execution } in
-			(update_status job, Process_state (execution.ex_state))
-	in
+	let initial_status = pid_status_of_job job in
 	let id = id_of_job job in
+
+	let job, events = match event with
+		| External event ->
+			job, [event]
+
+		| Job_executing (execution, state) ->
+			let job = { job with execution = Some execution } in
+			(job, [Process_state state; Output (Some [])])
+	in
+	let job = List.fold_left (fun job event ->
+		{ job with external_job = Job.update_job job.external_job event }
+	) job events in
+	let status = pid_status_of_job job in
+	if (initial_status <> status) then (
+		update_pid_status ~state ~id status
+	);
 	
-	let jobs = updated_job |> Option.fold state.jobs (fun job ->
-		StringMap.add id job state.jobs
-	) in
-	(jobs, Job_event (id, event))
+	let jobs = StringMap.add id job state.jobs in
+	let events = events |> List.map (fun e -> Event.Job_event (id, e)) in
+	(jobs, events)
 
 let is_running pid =
 	let open Unix in
@@ -247,12 +227,11 @@ let load_state config state_dir : state R.std_result =
 		let executions = pid_states |> List.map (fun (job_id, st) ->
 			let pid = st.ps_pid in
 			let termination = watch_termination pid in
-			{
+			let pid_status = st.ps_state |> Option.map (update_process_state st.ps_pid) in
+			({
 				job_id; pid; termination;
-				ex_state = update_process_state st.ps_pid st.ps_state;
 				output_watch = None;
-				output_buffer = None;
-			}
+			}, pid_status)
 		) in
 
 		(* Make a map of job configs first *)
@@ -260,11 +239,21 @@ let load_state config state_dir : state R.std_result =
 			|> StringMap.build_keyed Server_config.id_of_job_configuration in
 
 		(* then merge it with executions *)
-		let execution_map = executions |> StringMap.build_keyed id_of_job_execution in
+		let execution_map = executions |> StringMap.build_keyed (fun (ex,_) -> id_of_job_execution ex) in
 		let jobs = StringMap.mapi (fun id conf ->
+
+			let execution, pid_status = match StringMap.find_opt id execution_map with
+				| Some (ex, pid_status) -> Some ex, pid_status
+				| None -> None, None
+			in
 			{
 				job_configuration = conf;
-				execution = StringMap.find_opt id execution_map;
+				execution;
+				external_job = {
+					job = conf.Server_config.job;
+					state = pid_status;
+					output = None;
+				};
 			}
 		) job_map in
 
@@ -282,17 +271,18 @@ let load_state config state_dir : state R.std_result =
 	)
 
 let stop job =
-	job.execution |> Option.map (function { ex_state; pid; _ } ->
-		match ex_state with
-			| Exited _ as ex -> Ok (Some (Process_state ex))
-			| Running -> R.wrap (Unix.kill pid) Sys.sigint |> R.map (fun () -> None)
+	job.execution |> Option.map (function { pid; _ } ->
+		match job.external_job.state with
+			| Some (Exited _ as ex) -> Ok (Some (Process_state ex))
+			| None -> Ok None
+			| Some (Running) -> R.wrap (Unix.kill pid) Sys.sigint |> R.map (fun () -> None)
 	) |> Option.default (Ok None)
 
 let start ~state job = (
-	job.execution |> Option.fold (Ok ()) (function { ex_state; _ } ->
-		match ex_state with
+	job.external_job.state |> Option.fold (Ok ()) (function state ->
+		match state with
 			| Running -> Error (Sexp.Atom "Job is already running")
-			| _finished -> Ok ()
+			| Exited _ -> Ok ()
 	) |> R.bindr (fun () ->
 		let config = job.job_configuration in
 		let log_filename = log_filename ~state ~job_id:config.job.id in
@@ -303,14 +293,12 @@ let start ~state job = (
 			let result = R.wrap (Unix.create_process (List.hd argv) (Array.of_list argv) devnull log_file) log_file
 				|> R.map (fun pid ->
 					let termination = watch_termination pid in
-					Some (Job_executing {
+					Some (Job_executing ({
 						job_id = config.job.id;
 						pid = pid;
-						ex_state = Running;
 						termination;
 						output_watch = Some (watch_output ~id:config.job.id ~termination ~emit:state.emit log_filename);
-						output_buffer = Some [];
-					})
+					}, Running))
 				)
 			in
 			Unix.close log_file;
@@ -319,7 +307,7 @@ let start ~state job = (
 	)
 )
 
-let invoke : state -> Job.command -> (jobs * Event.event) option R.std_result = fun state (id, cmd) ->
+let invoke : state -> Job.command -> (jobs * Event.event list) option R.std_result = fun state (id, cmd) ->
 	let job = state.jobs |> StringMap.find_opt id in
 	job |> Option.map (fun job ->
 		(* TODO: update job status in case it's changed behind us? *)

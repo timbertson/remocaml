@@ -41,14 +41,14 @@ let client_state state =
 		};
 	})
 
-let invoke state_ref : Event.command -> Event.event option R.std_result Lwt.t =
+let invoke state_ref : Event.command -> Event.event list R.std_result Lwt.t =
 	let open Event in
 	let state = !state_ref in
 	function
 	| Music_command cmd ->
-		Server_music.invoke state.server_music_state cmd
+		Server_music.invoke state.server_music_state cmd |> Lwt.map (R.map Option.to_list)
 	| Job_command cmd ->
-		Lwt.return (Server_job.invoke state.server_jobs cmd |> R.map (Option.map (fun (job_state, event) ->
+			Lwt.return (Server_job.invoke state.server_jobs cmd |> R.map (Option.fold [] (fun (job_state, events) ->
 			state_ref := { state with server_jobs = { state.server_jobs with jobs = job_state }};
-			event
+			events
 		)))

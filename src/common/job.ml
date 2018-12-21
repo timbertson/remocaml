@@ -31,6 +31,7 @@ type command = id * job_command
 
 type job_event =
 	| Process_state of process_state
+	| Output of string list option
 	| Output_line of string
 	[@@deriving sexp]
 
@@ -51,14 +52,16 @@ let modify_list_item modifier items =
 		modifier item |> Option.default item
 	)
 
+let update_job job = function
+	| Process_state state -> { job with state = Some state }
+	| Output output ->
+			{ job with output = output }
+	| Output_line line ->
+			Log.info(fun m->m"adding line (is currently %b)" (Option.is_some job.output));
+			{ job with output = job.output |> Option.map (fun o -> o @ [line])
+	}
+
 let update state (id, event) =
-	let modifier = match event with
-		| Process_state state -> fun job -> { job with state = Some state }
-		| Output_line line -> fun job ->
-				Log.info(fun m->m"adding line (is currently %b)" (Option.is_some job.output));
-				{ job with output = job.output |> Option.map (fun o -> o @ [line])
-		}
-	in
 	{ jobs = state.jobs |> modify_list_item (fun job ->
-		if job.job.id = id then Some (modifier job) else None
+		if job.job.id = id then Some (update_job job event) else None
 	) }

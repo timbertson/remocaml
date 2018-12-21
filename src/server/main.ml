@@ -110,11 +110,11 @@ let handler ~config ~state ~static_cache ~static_root = fun conn req body ->
 				Server_state.invoke state command
 			) in
 			Log.debug (fun m->
-				let result_s = R.sexp_of_result (Conv.sexp_of_option Event.sexp_of_event) response in
+				let result_s = R.sexp_of_result (Conv.sexp_of_list Event.sexp_of_event) response in
 				m"/invoke response: %s" (Sexp.to_string result_s));
 			let (status, body) = match response with
-				| Ok event ->
-						event |> Option.may (Connections.broadcast);
+				| Ok events ->
+						events |> List.iter Connections.broadcast;
 						(`OK, "")
 				| Error err -> (`Internal_server_error, Sexp.to_string (R.sexp_of_error err))
 			in
