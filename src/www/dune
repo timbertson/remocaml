@@ -1,6 +1,7 @@
 ; vim: set syntax=lisp commentstring=;\ %s:
 (executable
 	(name main)
+	(flags (:include ../flags))
 	(libraries
 		remo_common
 		js_of_ocaml

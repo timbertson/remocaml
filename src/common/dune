@@ -1,6 +1,7 @@
 ; vim: set syntax=lisp commentstring=;\ %s:
 (library
 	(name remo_common)
+	(flags (:include ../flags))
 	(libraries
 		logs
 		rresult
