@@ -3,6 +3,7 @@ module R = Rresult_ext
 open Sexplib
 open Sexplib.Std
 open Fieldslib
+open Js_of_ocaml
 
 module Log = (val (Logs.src_log (Logs.Src.create "ui_state")))
 

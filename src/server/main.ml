@@ -232,14 +232,14 @@ let () =
 
 	let state = ref server_state in
 	let callback = handler ~config ~static_cache ~static_root ~state in
-	let mode =
+	let mode = `TCP (
 		if getenv "LISTEN_PID" |> Option.fold false (fun listen -> listen = string_of_int (Unix.getpid ()))
-		then `Listening_socket (Lwt_unix.of_unix_file_descr ((Obj.magic 3) : Unix.file_descr))
-		else `TCP  (`Port (getenv "REMOCAML_PORT" |> Option.map int_of_string |> Option.default 8000))
-	in
+		then `Socket (Lwt_unix.of_unix_file_descr ((Obj.magic 3) : Unix.file_descr))
+		else `Port (getenv "REMOCAML_PORT" |> Option.map int_of_string |> Option.default 8000)
+	) in
 	Log.info (fun m->m "Listening on %s" (match mode with
+		| `TCP (`Socket _) -> "<inherited systemd socket>"
 		| `TCP (`Port port) -> "port " ^ (string_of_int port)
-		| `Listening_socket _ -> "<inherited systemd socket>"
 	));
 
 	let server = Server.create ~mode
