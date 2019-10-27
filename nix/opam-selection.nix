@@ -3,14 +3,14 @@
 self:
 let
     lib = self.lib;
-    opam-commit = "fe7287db1d181301806bfb03d74368b2fc7f567a";
+    opam-commit = "feef05dfa6dd1dc66616abae311e41bc0830d59b";
     pkgs = self.pkgs;
     repo = (pkgs.fetchFromGitHub) 
     {
       owner = "ocaml";
       repo = "opam-repository";
       rev = opam-commit;
-      sha256 = "0hspp7f66nk4194aladpdzhjb1mizp53q5j7ya6ack5biyrkx4q3";
+      sha256 = "0pal75rixcd77vf8366852n6m2mw3azpqahvslah7nfc58s8ml28";
     };
     repoPath = self.repoPath;
     selection = self.selection;
@@ -153,6 +153,49 @@ in
         url = "https://github.com/mjambon/biniou/releases/download/1.2.1/biniou-1.2.1.tbz";
       };
       version = "1.2.1";
+    };
+    camomile = 
+    {
+      opamInputs = 
+      {
+        dune = selection.dune;
+        ocaml = selection.ocaml;
+      };
+      opamSrc = repoPath repo 
+      {
+        hash = "sha256:0r38mkgbfbbma0s6ccyqxmn27jby7jpfqjadblmv6wkd0g4kx588";
+        package = "packages/camomile/camomile.1.0.2";
+      };
+      pname = "camomile";
+      src = pkgs.fetchurl 
+      {
+        sha256 = "0chn7ldqb3wyf95yhmsxxq65cif56smgz1mhhc7m0dpwmyq1k97h";
+        url = "https://github.com/yoriyuki/Camomile/releases/download/1.0.2/camomile-1.0.2.tbz";
+      };
+      version = "1.0.2";
+    };
+    charInfo_width = 
+    {
+      opamInputs = 
+      {
+        camomile = selection.camomile;
+        dune = selection.dune;
+        ocaml = selection.ocaml;
+        ppx_expect = selection.ppx_expect or null;
+        result = selection.result;
+      };
+      opamSrc = repoPath repo 
+      {
+        hash = "sha256:0k7czdg1flqgscmp31dggdw2nlj02jkvy4zkb0m5g4q0p9qqikb8";
+        package = "packages/charInfo_width/charInfo_width.1.1.0";
+      };
+      pname = "charInfo_width";
+      src = pkgs.fetchurl 
+      {
+        sha256 = "00bv4p1yqs8y0z4z07wd9w9yyv669dikp9b04dcjbwpiy2wy0086";
+        url = "https://bitbucket.org/zandoye/charinfo_width/get/1.1.0.tar.gz";
+      };
+      version = "1.1.0";
     };
     cmdliner = 
     {
@@ -426,16 +469,16 @@ in
       };
       opamSrc = repoPath repo 
       {
-        hash = "sha256:0sl24yl7j5rmag0nv4zwdvhmisndlm89qc6fwsdiicaffj09mcay";
-        package = "packages/dune/dune.1.11.3";
+        hash = "sha256:0ll4k4w9ahl9jizkbflwy37vhy2igr7ms0rqz5zv38xhhx8hd2fp";
+        package = "packages/dune/dune.1.11.4";
       };
       pname = "dune";
       src = pkgs.fetchurl 
       {
-        sha256 = "1lmvsis6dk8mccbwpypz9qdxr134gjhdwshxw6q12mi4x3kn6fn8";
-        url = "https://github.com/ocaml/dune/releases/download/1.11.3/dune-build-info-1.11.3.tbz";
+        sha256 = "1rkc8lqw30ifjaz8d81la6i8j05ffd0whpxqsbg6dci16945zjvp";
+        url = "https://github.com/ocaml/dune/releases/download/1.11.4/dune-build-info-1.11.4.tbz";
       };
-      version = "1.11.3";
+      version = "1.11.4";
     };
     dune-configurator = 
     {
@@ -712,6 +755,32 @@ in
       };
       version = "1.0.1";
     };
+    lambda-term = 
+    {
+      opamInputs = 
+      {
+        camomile = selection.camomile;
+        dune = selection.dune;
+        lwt = selection.lwt;
+        lwt_log = selection.lwt_log;
+        lwt_react = selection.lwt_react;
+        ocaml = selection.ocaml;
+        react = selection.react;
+        zed = selection.zed;
+      };
+      opamSrc = repoPath repo 
+      {
+        hash = "sha256:0hw3f1x4dz9vbm9y4pgrwzsrqxzvma81vv34mqwr4krra96mrd9b";
+        package = "packages/lambda-term/lambda-term.2.0.2";
+      };
+      pname = "lambda-term";
+      src = pkgs.fetchurl 
+      {
+        sha256 = "1p9yczrx78pf5hvhcg1qiqb2vdlmw6bmhhjsm4wiqjq2cc6piaqw";
+        url = "https://github.com/ocaml-community/lambda-term/releases/download/2.0.2/lambda-term-2.0.2.tbz";
+      };
+      version = "2.0.2";
+    };
     logs = 
     {
       opamInputs = 
@@ -758,16 +827,16 @@ in
       };
       opamSrc = repoPath repo 
       {
-        hash = "sha256:1qq838jd97imwxg75xa5gjxfqx07mz8kz31zhyrlyd2n2shfh5ap";
-        package = "packages/lwt/lwt.4.3.0";
+        hash = "sha256:17czq0yc74arp7vpdarnr5gg3xab2jarh0d65qbp4dzyx7zw8ly9";
+        package = "packages/lwt/lwt.4.4.0";
       };
       pname = "lwt";
       src = pkgs.fetchurl 
       {
-        sha256 = "0gfj6bgv6vp82mg8kw1g7s2h9g08gs9m7i4w1ffw3l77b8pzd6k9";
-        url = "https://github.com/ocsigen/lwt/archive/4.3.0.tar.gz";
+        sha256 = "1g4bg6lxdxpayvdr51c1l8022gsj39nds0vw9aay4kkl6nlzv6vl";
+        url = "https://github.com/ocsigen/lwt/archive/4.4.0.tar.gz";
       };
-      version = "4.3.0";
+      version = "4.4.0";
     };
     lwt_log = 
     {
@@ -801,16 +870,16 @@ in
       };
       opamSrc = repoPath repo 
       {
-        hash = "sha256:1r0ka60v07l24ybdm1gj9amwhn6mdrigwgh18im0k9i5xnss90rx";
-        package = "packages/lwt_ppx/lwt_ppx.1.2.3";
+        hash = "sha256:17wr1r7q6mm7y968kifqkkrja8g0h1wzfsqj2ldysp1b1g540n05";
+        package = "packages/lwt_ppx/lwt_ppx.1.2.4";
       };
       pname = "lwt_ppx";
       src = pkgs.fetchurl 
       {
-        sha256 = "0gfj6bgv6vp82mg8kw1g7s2h9g08gs9m7i4w1ffw3l77b8pzd6k9";
-        url = "https://github.com/ocsigen/lwt/archive/4.3.0.tar.gz";
+        sha256 = "1g4bg6lxdxpayvdr51c1l8022gsj39nds0vw9aay4kkl6nlzv6vl";
+        url = "https://github.com/ocsigen/lwt/archive/4.4.0.tar.gz";
       };
-      version = "1.2.3";
+      version = "1.2.4";
     };
     lwt_react = 
     {
@@ -886,16 +955,16 @@ in
       };
       opamSrc = repoPath repo 
       {
-        hash = "sha256:1zzngxvs5iv1ri2xrmjawbxw1m8dm949fl4cxr2j0y34wgpbzizj";
-        package = "packages/menhir/menhir.20190626";
+        hash = "sha256:08pm2gmmfdbciwd1r1hx2jy5912lhq0ifsc3fwajjmd6vz3iimj5";
+        package = "packages/menhir/menhir.20190924";
       };
       pname = "menhir";
       src = pkgs.fetchurl 
       {
-        sha256 = "0nigjnskg89knyi2zj1w211mb1pvkrwfqpz9a0qbw80k3hm8gg0h";
-        url = "https://gitlab.inria.fr/fpottier/menhir/repository/20190626/archive.tar.gz";
+        sha256 = "1bm6d30fasnr9f1ghvl7hfipgqspb3b4x5m0ahk3vdjjf9hpg4ip";
+        url = "https://gitlab.inria.fr/fpottier/menhir/repository/20190924/archive.tar.gz";
       };
-      version = "20190626";
+      version = "20190924";
     };
     mmap = 
     {
@@ -1619,6 +1688,35 @@ in
       };
       version = "3.0.0";
     };
+    utop = 
+    {
+      opamInputs = 
+      {
+        base-threads = selection.base-threads;
+        base-unix = selection.base-unix;
+        camomile = selection.camomile;
+        cppo = selection.cppo;
+        dune = selection.dune;
+        lambda-term = selection.lambda-term;
+        lwt = selection.lwt;
+        lwt_react = selection.lwt_react;
+        ocaml = selection.ocaml;
+        ocamlfind = selection.ocamlfind;
+        react = selection.react;
+      };
+      opamSrc = repoPath repo 
+      {
+        hash = "sha256:1qjpj4dgiwpzipd4c9ks02ggars9vxmvq560gj8wpa8h3illsp17";
+        package = "packages/utop/utop.2.4.2";
+      };
+      pname = "utop";
+      src = pkgs.fetchurl 
+      {
+        sha256 = "0y2v8rkfz19nlz8gh0lkh5wx5hyvw5gl4nw1kg8j2pw9jnilq5nb";
+        url = "https://github.com/ocaml-community/utop/releases/download/2.4.2/utop-2.4.2.tbz";
+      };
+      version = "2.4.2";
+    };
     uutf = 
     {
       opamInputs = 
@@ -1712,6 +1810,30 @@ in
         url = "https://github.com/ocaml-community/yojson/releases/download/1.7.0/yojson-1.7.0.tbz";
       };
       version = "1.7.0";
+    };
+    zed = 
+    {
+      opamInputs = 
+      {
+        base-bytes = selection.base-bytes;
+        camomile = selection.camomile;
+        charInfo_width = selection.charInfo_width;
+        dune = selection.dune;
+        ocaml = selection.ocaml;
+        react = selection.react;
+      };
+      opamSrc = repoPath repo 
+      {
+        hash = "sha256:01hv2z69nc7wng2w60gffg9830n58f1j54vhj0plri98q5dilw13";
+        package = "packages/zed/zed.2.0.3";
+      };
+      pname = "zed";
+      src = pkgs.fetchurl 
+      {
+        sha256 = "0f4miyxa5sb8xs3nzzvl3spzl6bpnzd1sgc4bcjgh6gsws4avql3";
+        url = "https://github.com/ocaml-community/zed/releases/download/2.0.3/zed-2.0.3.tbz";
+      };
+      version = "2.0.3";
     };
   };
 }

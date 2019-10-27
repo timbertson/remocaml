@@ -1,6 +1,3 @@
 #!bash -eu
 set -o pipefail
-gup -u ../remocaml.opam default.nix
-opam2nix="$(nix-build -A opam2nix --no-out-link ../)"
-vdoml="$(nix-build -A vdoml --no-out-link ../)"
-"$opam2nix/bin/opam2nix" resolve --dest "$1" $vdoml/vdoml.opam ../remocaml.opam --ocaml-version 4.08.1
+nix-shell -A resolve ../default.nix

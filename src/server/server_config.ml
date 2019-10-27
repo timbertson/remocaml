@@ -2,6 +2,7 @@ open Remo_common
 module R = Rresult_ext
 open Sexplib
 open Sexplib.Std
+module Log = (val (Logs.src_log (Logs.Src.create "server_config")))
 
 type job_configuration = {
 	job: Job.job_identity;
@@ -61,6 +62,7 @@ let accum_config conf directive = R.bind conf (fun conf -> parse_config conf dir
 
 let load ~state_dir path =
 	let load_file path =
+		Log.info (fun m->m "Loading config from %s" path);
 		try
 			Sexp.load_sexps path
 		with
