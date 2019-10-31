@@ -276,12 +276,26 @@ let stop job =
 		Log.info (fun m->m"stopping job with PID %d" pid);
 		if Lwt.is_sleeping termination then (
 				Log.debug (fun m->m"Killing with %d..." Sys.sigint);
-				R.wrap (Unix.kill pid) Sys.sigint
+				R.wrap (Unix.kill (-pid)) Sys.sigint
 		) else (
 			Log.debug (fun m->m"Already terminated...");
 			Ok ()
 		)
 	) |> Option.default (Ok ())
+
+let create_detached_process exe argv stdin stdout =
+	R.wrap Unix.fork () |> R.map (function
+		| 0 -> (
+			Unix.dup2 stdin Unix.stdin;
+			Unix.dup2 stdout Unix.stdout;
+			Unix.dup2 stdout Unix.stderr;
+			Unix.close stdin;
+			Unix.close stdout;
+			let (_: int) = Unix.setsid ();
+			Unix.execvp exe argv
+		)
+		| pid -> pid
+	)
 
 let start ~state job = (
 	job.external_job.state |> Option.fold (Ok ()) (function state ->
@@ -295,7 +309,7 @@ let start ~state job = (
 			|> R.prefix_error ("Can't open job output file")
 			|> R.bindr (fun log_file ->
 			let argv = config.command in
-			let result = R.wrap (Unix.create_process (List.hd argv) (Array.of_list argv) devnull log_file) log_file
+			let result = create_detached_process (List.hd argv) (Array.of_list argv) devnull log_file
 				|> R.map (fun pid ->
 					let termination = watch_termination pid in
 					Some (Job_executing ({
