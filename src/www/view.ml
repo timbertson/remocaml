@@ -3,6 +3,7 @@ open Vdoml
 open Html
 open Ui_state
 open Sexplib
+open Util
 
 let card ?header ?(cls=[]) body = div ~a:[a_class_list (cls @ ["card"])] [
 	(header |> Option.map (fun header -> div ~a:[a_class "card-header"] [ text header ]) |> Option.default empty);
@@ -66,6 +67,7 @@ let view_job _instance =
 	let open Remo_common.Event in
 	let open Job in
 
+	let append_newline s = s ^ "\n" in
 	let button id icon action = span ~a:[
 		a_class ("button rounded-circle job-"^icon);
 		a_onclick (emitter (Invoke (Job_command (id, action))));
@@ -78,16 +80,16 @@ let view_job _instance =
 				| Some Running -> button "stop" Stop
 			in
 			let output_shown, output_display = output |> Option.fold
-				(false, empty)
+				(false, [ empty ])
 				(fun output -> (true, match output with
-					| [] -> text "(no output)"
-					| output -> div (output |> List.map text))
+					| [] -> [ text "(no output)" ]
+					| output -> output |> List.map (text % append_newline))
 				)
 			in
 			[
 				start_or_stop;
 				button "list" (Show_output (not output_shown));
-				output_display;
+				pre ~a:[a_class "output"] output_display;
 			]
 		)
 	)

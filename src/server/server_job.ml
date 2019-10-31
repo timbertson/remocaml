@@ -272,12 +272,16 @@ let load_state config state_dir : state R.std_result =
 	)
 
 let stop job =
-	job.execution |> Option.map (function { pid; _ } ->
-		match job.external_job.state with
-			| Some (Exited _ as ex) -> Ok (Some (Process_state ex))
-			| None -> Ok None
-			| Some (Running) -> R.wrap (Unix.kill pid) Sys.sigint |> R.map (fun () -> None)
-	) |> Option.default (Ok None)
+	job.execution |> Option.map (function { pid; termination; _ } ->
+		Log.info (fun m->m"stopping job with PID %d" pid);
+		if Lwt.is_sleeping termination then (
+				Log.debug (fun m->m"Killing with %d..." Sys.sigint);
+				R.wrap (Unix.kill pid) Sys.sigint
+		) else (
+			Log.debug (fun m->m"Already terminated...");
+			Ok ()
+		)
+	) |> Option.default (Ok ())
 
 let start ~state job = (
 	job.external_job.state |> Option.fold (Ok ()) (function state ->
@@ -314,7 +318,7 @@ let invoke : state -> Job.command -> (jobs * Event.event list) option R.std_resu
 		(* TODO: update job status in case it's changed behind us? *)
 		(match cmd with
 			| Start -> start ~state job
-			| Stop -> stop job |> R.map (Option.map (fun x -> External x))
+			| Stop -> stop job |> R.map (fun () -> None)
 			| Refresh -> failwith "TODO"
 			| Show_output _show -> failwith "TODO"
 		) |> R.map (Option.map (fun internal_event ->

@@ -91,65 +91,59 @@ pre {
 	.track { color: #333; }
 }
 
-.task {
+.job-card {
 	//padding: 0 1em;
-	color: white;
-}
+	// .task h3 {
+	// 	background: rgb(87, 87, 87);
+	// 	border-radius: 10px;
+	// 	border-bottom-right-radius: 0;
+	// 	border-bottom-left-radius: 0;
+	// 	margin: 0;
+	// 	padding: 0.3em;
+	// 	margin-top:1em;
+	// 	border-bottom: 1px solid rgb(116, 116, 116);
+	// 	font-size: 1.4em;
+	// 	font-weight: bold;
+	// }
+  //
+	// .task .invisible {
+	// 	visibility: hidden;
+	// }
+  //
+	// .task.running h3 {
+	// 	background: rgb(48, 134, 26);
+	// 	border-color: rgb(91, 173, 70);
+	// }
+  //
+	// .task .ctl {
+	// 	clear: both;
+	// 	padding: 0.5em;
+	// 	padding-bottom: 1em;
+	// 	padding-top: 0;
+	// 	background: #333;
+	// 	margin: 0 0 2em 0;
+	// }
+  //
+	.output {
+		margin: 0; padding:0;
+		whitespace:pre;
+		color: white;
+		border-radius: 0;
+		text-align: left;
+		max-height: 20em;
+		overflow:auto;
+		background: transparent;
+		border: none;
 
-.task h3 {
-	background: rgb(87, 87, 87);
-	border-radius: 10px;
-	border-bottom-right-radius: 0;
-	border-bottom-left-radius: 0;
-	margin: 0;
-	padding: 0.3em;
-	margin-top:1em;
-	border-bottom: 1px solid rgb(116, 116, 116);
-	font-size: 1.4em;
-	font-weight: bold;
-}
+		transition-duration: 0.5s;
+		transition-timing-function: ease-in-out;
+	}
 
-.task .invisible {
-	visibility: hidden;
-}
-
-.task.running h3 {
-	background: rgb(48, 134, 26);
-	border-color: rgb(91, 173, 70);
-}
-
-.task .ctl {
-	clear: both;
-	padding: 0.5em;
-	padding-bottom: 1em;
-	padding-top: 0;
-	background: #333;
-	margin: 0 0 2em 0;
-}
-
-.task .output {
-	margin: 0; padding:0;
-	whitespace:pre;
-	color: white;
-	border-radius: 0;
-	text-align: left;
-	max-height: 20em;
-	overflow:auto;
-	background: transparent;
-	border: none;
-
-	transition-duration: 0.5s;
-	transition-timing-function: ease-in-out;
-}
-
-.task .kill {
-	background: rgb(228, 66, 66);
-	margin-right:1em;
-	float: right;
-}
-
-.task .ctl .glyphicon {
-	font-size:1.5em;
+	// .task .kill {
+	// 	background: rgb(228, 66, 66);
+	// 	margin-right:1em;
+	// 	float: right;
+	// }
 }
 
 .section {
