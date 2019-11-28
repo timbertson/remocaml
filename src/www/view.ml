@@ -3,6 +3,7 @@ open Vdoml
 open Html
 open Ui_state
 open Sexplib
+open Util
 
 let card ?header ?(cls=[]) body = div ~a:[a_class_list (cls @ ["card"])] [
 	(header |> Option.map (fun header -> div ~a:[a_class "card-header"] [ text header ]) |> Option.default empty);
@@ -66,30 +67,30 @@ let view_job _instance =
 	let open Remo_common.Event in
 	let open Job in
 
+	let append_newline s = s ^ "\n" in
 	let button id icon action = span ~a:[
 		a_class ("button rounded-circle job-"^icon);
 		a_onclick (emitter (Invoke (Job_command (id, action))));
 	] [] in
-	fun { job; state = state } -> (
+	fun { job; state; output } -> (
 		let button = button job.id in
 		card ~header:job.name ~cls:["text-white"; "bg-secondary"; "job-card"] (
-			state |> Option.map (fun state ->
-				let start_or_stop = match state.process_state with
-					| Running -> button "stop" Stop
-					| Exited _ -> button "run" Start
-				in
-				let output_shown = state.output |> Option.is_some in
-				let output_display = state.output |> Option.map (function
-					| [] -> text "(no output)"
-					| output -> div (output |> List.map text)
-				) |> Option.default empty in
-				[
-					start_or_stop;
-					button "list" (Show_output (not output_shown));
-					button "refresh" Refresh;
-					output_display;
-				]
-			) |> Option.default []
+			let start_or_stop = match state with
+				| None | Some (Exited _) -> button "run" Start
+				| Some Running -> button "stop" Stop
+			in
+			let output_shown, output_display = output |> Option.fold
+				(false, [ empty ])
+				(fun output -> (true, match output with
+					| [] -> [ text "(no output)" ]
+					| output -> output |> List.map (text % append_newline))
+				)
+			in
+			[
+				start_or_stop;
+				button "list" (Show_output (not output_shown));
+				pre ~a:[a_class "output"] output_display;
+			]
 		)
 	)
 
@@ -99,9 +100,7 @@ let view_jobs =
 	let open Job in
 	fun instance ->
 		let children = Ui.collection ~id:(fun {job; _ } -> `String job.id) job_component instance in
-		fun { jobs } ->
-			Log.info(fun m->m"There are %d jobs..." (List.length jobs));
-			div (children jobs)
+		fun { jobs } -> div (children jobs)
 
 let view ~show_debug instance =
 	let view_music = view_music instance in
@@ -127,6 +126,8 @@ let view ~show_debug instance =
 							div ~a:[a_class "log"] [
 								h3 [text "Log:"];
 								div [text log];
+								h3 [text "State:"];
+								div [text (Sexp.to_string (sexp_of_state server_state))];
 							];
 						]
 					)) |> Option.default empty

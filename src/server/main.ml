@@ -18,7 +18,6 @@ let static_files = StringSet.of_list [
 	"style.css";
 	"bootstrap.min.css";
 ]
-let static_root = "_build/default/src/www"
 
 type 'a http_result = ('a, (Code.status_code * Sexp.t)) result
 
@@ -36,7 +35,7 @@ let reconnect config state =
 	};
 	Lwt.return error_events
 
-let handler ~config ~state ~static_cache = fun conn req body ->
+let handler ~config ~state ~static_cache ~static_root = fun conn req body ->
 	let uri = req |> Request.uri in
 	let path = Uri.path uri in
 	let meth = req |> Request.meth in
@@ -79,7 +78,7 @@ let handler ~config ~state ~static_cache = fun conn req body ->
 			] in
 			let events = Connections.add_event_stream conn (reconnect_events @ initialize_state) in
 
-			let dbus_events: (Event.event, Sexp.t) result Lwt_stream.t =
+			let dbus_events: Event.event R.std_result Lwt_stream.t =
 				let open Server_music in
 				let peers = (!state).Server_state.server_music_state.peers in
 				Lwt_stream.choose (List.filter_map identity [
@@ -88,10 +87,13 @@ let handler ~config ~state ~static_cache = fun conn req body ->
 				])
 			in
 
-			let response = Lwt_stream.choose [events; dbus_events] |> Lwt_stream.map (fun event ->
-				event |> R.map Event.sexp_of_event
-				|> R.sexp_of_result
-				|> fun s ->
+			let job_events: Event.event R.std_result Lwt_stream.t =
+				let open Server_job in
+				Lwt_react.E.to_stream ((!state).Server_state.server_jobs.events)
+			in
+
+			let response = Lwt_stream.choose [events; dbus_events; job_events] |> Lwt_stream.map (fun event ->
+				event |> R.sexp_of_result Event.sexp_of_event |> fun s ->
 					Log.debug (fun m->m "emitting: %s" (Sexp.to_string s));
 					"data: " ^ (Sexp.to_string s) ^ "\n\n"
 			) in
@@ -105,10 +107,15 @@ let handler ~config ~state ~static_cache = fun conn req body ->
 			let%lwt command = body |> Cohttp_lwt.Body.to_string in
 			let command = command |> R.wrap (Event.command_of_sexp % Sexp.of_string) in
 			let%lwt response = command |> R.bind_lwt (fun command ->
-				Server_state.invoke !state command
+				Server_state.invoke state command
 			) in
+			Log.debug (fun m->
+				let result_s = R.sexp_of_result (Conv.sexp_of_list Event.sexp_of_event) response in
+				m"/invoke response: %s" (Sexp.to_string result_s));
 			let (status, body) = match response with
-				| Ok () -> (`OK, "")
+				| Ok events ->
+						events |> List.iter Connections.broadcast;
+						(`OK, "")
 				| Error err -> (`Internal_server_error, Sexp.to_string (R.sexp_of_error err))
 			in
 			let headers = Header.add_list (Header.init ()) [
@@ -185,24 +192,57 @@ let getenv key =
 let () =
 	init_logs ();
 
-	let ephemeral = (try Unix.getenv "REMOCAML_EPHEMERAL" with Not_found -> "false") = "true" in
+	let ephemeral = match getenv "REMOCAML_EPHEMERAL" |> Option.default "false" with
+		| "false" -> None
+		| "true" -> Some(20)
+		| seconds -> Some(int_of_string seconds)
+	in
 	Connections.Timeout.set_ephemeral ephemeral;
 
-	let config_path = getenv "REMOCAML_CONFIG" |> Option.default "config/remocaml.sexp" in
-	let state_dir = getenv "REMOCAML_STATE" |> Option.default "/tmp/remocaml" in
+	let home = getenv "HOME" |> Option.force in
+	let config_path = getenv "REMOCAML_CONFIG" |> Option.default (Filename.concat home ".config/remocaml/config.sexp") in
+	let runtime_dir = getenv "XDG_RUNTIME_DIR" |> Option.default "/tmp" in
+	let state_dir = getenv "REMOCAML_STATE" |> Option.default (Filename.concat runtime_dir "remocaml") in
+
+	let static_root = match getenv "REMOCAML_STATIC" with
+		| Some dir -> dir
+		| None ->
+			let self = Sys.argv.(0) in
+			let here = Filename.dirname self in
+			(* let basedir = Filename.dirname here in *)
+			let basedir_name = Filename.basename here in
+			Log.debug (fun m->m"server basedir: %s" basedir_name);
+			if (basedir_name = "bin") then (
+				(* Running from an installed directory: *)
+				Filename.concat (Filename.dirname here) "share/remocaml"
+			) else (
+				Log.info (fun m->m "Not running from a bin/ directory, assuming development setup");
+				"_build/default/src/www"
+			)
+	in
 
 	let config = Server_config.load ~state_dir config_path |> R.force in
 	let server_state = Server_state.load config |> R.force in
 	Log.debug(fun m->m"server state: %s" (Server_state.sexp_of_state server_state |> Sexp.to_string));
+
 	let static_cache = StringMap.empty in
 	let static_cache = StringSet.fold (fun path map ->
 		StringMap.add path (read_entire_file (Filename.concat static_root path)) map
 	) static_files static_cache in
 
 	let state = ref server_state in
-	let callback = handler ~config ~static_cache ~state in
-	let server = Server.create
-		~mode:(`TCP (`Port 8000))
+	let callback = handler ~config ~static_cache ~static_root ~state in
+	let mode = `TCP (
+		if getenv "LISTEN_PID" |> Option.fold false (fun listen -> listen = string_of_int (Unix.getpid ()))
+		then `Socket (Lwt_unix.of_unix_file_descr ((Obj.magic 3) : Unix.file_descr))
+		else `Port (getenv "REMOCAML_PORT" |> Option.map int_of_string |> Option.default 8000)
+	) in
+	Log.info (fun m->m "Listening on %s" (match mode with
+		| `TCP (`Socket _) -> "<inherited systemd socket>"
+		| `TCP (`Port port) -> "port " ^ (string_of_int port)
+	));
+
+	let server = Server.create ~mode
 		~on_exn:(fun _ -> Log.warn (fun m->m"Error in server; ignoring"))
 		(Server.make ~callback ()) in
 	Lwt.async (fun () ->

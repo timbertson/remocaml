@@ -1,5 +1,7 @@
 ; vim: set syntax=lisp commentstring=;\ %s:
 (executable
+	; (allow_overlapping_dependencies)
+	(flags (:include ../flags))
 	(name main)
 	(public_name remocaml)
 	(libraries
@@ -8,7 +10,7 @@
 		lwt
 		logs.fmt
 		cohttp
-		cohttp.lwt
+		cohttp-lwt
 		cohttp-lwt-unix
 		obus
 	)

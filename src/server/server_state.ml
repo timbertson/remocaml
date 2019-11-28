@@ -2,7 +2,6 @@ open Remo_common
 module List = List_ext
 module R = Rresult_ext
 open Astring
-open Sexplib.Conv
 module Log = (val (Logs.src_log (Logs.Src.create "server_state")))
 module StringMap = Map.Make(String)
 
@@ -10,17 +9,11 @@ module StringMap = Map.Make(String)
 type state = {
 	server_config: Server_config.config;
 	server_music_state: Server_music.state;
-	server_jobs: Server_job.job list;
+	server_jobs: Server_job.state;
 } [@@deriving sexp_of]
 
 let ensure_config_dir config =
-	let rec ensure_exists dir =
-		try let _:Unix.stats = Unix.stat dir in ()
-		with Unix.Unix_error (Unix.ENOENT, _, _) -> (
-			ensure_exists (Filename.dirname dir);
-			Unix.mkdir dir 0o700
-		) in
-	ensure_exists config.Server_config.state_directory;
+	Unix_ext.mkdir_p config.Server_config.state_directory;
 	config.Server_config.state_directory
 
 let load config =
@@ -37,14 +30,25 @@ let client_state state =
 	State.({
 		music_state = state.server_music_state.music_state;
 		job_state = {
-			jobs = state.server_jobs
-				|> List.map Server_job.running_client_job;
+			jobs = state.server_jobs.jobs
+				|> StringMap.bindings
+				|> List.map snd
+				|> List.sort (fun a b ->
+					let open Server_job in
+					let open Server_config in
+					compare a.job_configuration.sort_order b.job_configuration.sort_order
+				) |> List.map Server_job.external_of_job;
 		};
 	})
 
-let invoke state =
+let invoke state_ref : Event.command -> Event.event list R.std_result Lwt.t =
 	let open Event in
+	let state = !state_ref in
 	function
 	| Music_command cmd ->
-		Server_music.invoke state.server_music_state cmd
-	| Job_command _cmd -> failwith "TODO"
+		Server_music.invoke state.server_music_state cmd |> Lwt.map (R.map Option.to_list)
+	| Job_command cmd ->
+			Lwt.return (Server_job.invoke state.server_jobs cmd |> R.map (fun (job_state, events) ->
+			state_ref := { state with server_jobs = { state.server_jobs with jobs = job_state }};
+			events
+		))

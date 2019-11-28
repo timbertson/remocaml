@@ -3,6 +3,7 @@ open Remo_common
 module R = Rresult_ext
 module Log = (val (Logs.src_log (Logs.Src.create "main")))
 open Pervasives
+open Js_of_ocaml
 
 open Sexplib
 
@@ -14,11 +15,10 @@ let component ~show_debug ~fake tasks =
 		event_source##.onmessage := Dom.handler (fun event ->
 			let data = event##.data |> Js.to_string in
 			Log.debug(fun m->m"Got event: %s" data);
-			let event: (Event.event, Sexp.t) result =
+			let event: Event.event R.std_result =
 				data
 					|> R.wrap Sexp.of_string
-					|> R.bindr R.result_of_sexp
-					|> R.bindr (R.wrap Event.event_of_sexp)
+					|> R.bindr (R.result_of_sexp Event.event_of_sexp)
 			in
 			Ui.emit instance (Ui_state.Server_event event);
 			Js._true

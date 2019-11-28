@@ -12,5 +12,9 @@ depends: [
   "lwt_ppx"
   "ppx_sexp_conv"
   "vdoml"
+  "rresult"
+]
+depexts: [
+  ["sassc"] {os-distribution = "nixpkgs"}
 ]
 build: [ "dune" "build" "-p" "remocaml" ]

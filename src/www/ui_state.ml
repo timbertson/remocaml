@@ -1,9 +1,9 @@
 open Remo_common
-open Util
 module R = Rresult_ext
 open Sexplib
 open Sexplib.Std
 open Fieldslib
+open Js_of_ocaml
 
 module Log = (val (Logs.src_log (Logs.Src.create "ui_state")))
 
@@ -32,7 +32,7 @@ let eq : t -> t -> bool = fun a b ->
 		~log:(use (=))
 
 type event_result = (Event.event, Sexp.t) R.result
-let sexp_of_event_result = R.sexp_of_result % (R.map Event.sexp_of_event)
+let sexp_of_event_result = R.sexp_of_result Event.sexp_of_event
 
 type event =
 	| Reconnect
@@ -42,7 +42,11 @@ type event =
 
 let update state : event -> t = function
 	| Server_event (Error err) -> { state with error = Some err }
-	| Server_event (Ok evt) -> { state with server_state = Event.update state.server_state evt }
+	| Server_event (Ok evt) ->
+		Log.info(fun m->m"applying server event: %s" (Sexp.to_string (Event.sexp_of_event evt)));
+		let server_state = Event.update state.server_state evt in
+		Log.info(fun m->m"updated; server state = %s" (Sexp.to_string (State.sexp_of_state server_state)));
+		{ state with server_state = server_state }
 	| Reconnect | Invoke _ -> state
 
 let update state event = { (update state event) with log = match event with

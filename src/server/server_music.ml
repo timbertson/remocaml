@@ -54,7 +54,7 @@ let delayed_stream (stream: 'a Lwt_stream.t Lwt.t) : 'a Lwt_stream.t =
 
 let player_events player =
 	let open Event in
-	let rec get_string key : OBus_value.V.single -> (string, Sexp.t) result = let open OBus_value.V in function
+	let rec get_string key : OBus_value.V.single -> string R.std_result = let open OBus_value.V in function
 		| Basic (String v) -> Ok v
 		| Array (_typ, values) -> get_string_of_list key values
 		| Structure (values) -> get_string_of_list key values
@@ -186,7 +186,7 @@ let invoke state =
 	in
 	let volume direction =
 		state.peers.volume
-			|> Option.map (fun volume : (unit, Sexplib.Sexp.t) result Lwt.t ->
+			|> Option.map (fun volume : unit R.std_result Lwt.t ->
 				R.wrap_lwt (fun { pa_device; _ } : unit Lwt.t ->
 					let open Pulseaudio_client.Org_PulseAudio_Core1_Device in
 					let%lwt (max, vol) = Lwt.zip
@@ -216,12 +216,14 @@ let invoke state =
 			)
 			|> Option.default_fn (fun () -> Lwt.return (Ok ()))
 	in
-	function
-	| Previous -> music previous
-	| PlayPause -> music play_pause
-	| Next -> music next
-	| Louder -> volume 1
-	| Quieter -> volume (-1)
+	let invoke = function
+		| Previous -> music previous
+		| PlayPause -> music play_pause
+		| Next -> music next
+		| Louder -> volume 1
+		| Quieter -> volume (-1)
+	in
+	fun command -> invoke command |> Lwt.map (R.map (fun () -> None))
 
 let discover_volume_device session_bus : volume Lwt.t =
 	let%lwt (address:string) = (
