@@ -20,20 +20,20 @@ pre {
 }
 
 .music-button, .job-card .button {
-	background: rgb(87, 131, 197);
-	color:white;
 	display:inline-block;
 	height:2em;
 	width:2em;
-	text-align:center;
 	line-height:2em;
+	text-align:center;
 	margin: 2px;
-	margin-top: 10px;
-	margin-bottom: 5px;
 }
 
 .music-button {
 	font-size:1.8em;
+	background: rgb(87, 131, 197);
+	color:white;
+	margin-top: 10px;
+	margin-bottom: 5px;
 }
 
 
@@ -210,10 +210,33 @@ pre {
 }
 
 .job-card {
+	&.empty .card-body {
+		padding: 0;
+	}
 	.button {
+		background: white;
+		color: #474c50;
+		margin-top: 0;
+		margin-bottom: 0;
+
 		&.job-run:before { content: fa-content($fa-var-play); }
 		&.job-stop:before { content: fa-content($fa-var-stop); }
 		&.job-list:before { content: fa-content($fa-var-list); }
+	}
+
+	.card-header {
+		line-height: 2em;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		overflow: hidden;
+		.text {
+			font-size: 1.3em;
+		}
+	}
+
+	.controls {
+		float: right;
+		display: inline-block;
 	}
 }
 
