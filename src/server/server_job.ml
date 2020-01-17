@@ -24,7 +24,6 @@ module StringMap = struct
 end
 
 let devnull = Unix.(openfile "/dev/null" [O_RDONLY; O_CLOEXEC]) 0o600
-let err_str str = Error (Sexp.Atom str)
 
 (* A job execution. Either running or recently-run *)
 type job_execution = {
