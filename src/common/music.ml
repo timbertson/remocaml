@@ -8,6 +8,7 @@ type track = {
 type state = {
 	playing: bool;
 	volume: float option;
+	irank: Irank.t option;
 	track: track;
 } [@@deriving sexp]
 
@@ -17,6 +18,7 @@ type command =
 	| Next
 	| Louder
 	| Quieter
+	| Rate of Irank.rating
 	[@@deriving sexp]
 
 type event =
@@ -34,6 +36,7 @@ let init () = {
 	playing = false;
 	volume = None;
 	track = unknown_track;
+	irank = None;
 }
 
 let update state = function

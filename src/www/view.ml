@@ -51,6 +51,28 @@ let view_music _instance =
 				btn Louder "plus";
 			]
 		) in
+
+		let rec rating_stars rating = function
+			| 6 -> []
+			| n ->
+				let open Irank in
+				let enabled = rating.rating_value >= n in
+				let action = emitter (Invoke (Music_command (Rate { rating with rating_value = n }))) in
+				let star = span ~a:[
+					a_class_list ["star-button"; (if enabled then "full" else "empty")];
+					a_onclick action;
+				] [] in
+				star :: rating_stars rating (n+1)
+		in
+		let irank_controls = state.irank |> Option.map (fun ratings ->
+			div ~a:[a_class "irank-ratings"] (ratings |> List.map (fun rating ->
+				[
+					span ~a:[a_class "rating-name"] [text rating.Irank.rating_name];
+					span ~a:[a_class "rating-value"] (rating_stars rating 0);
+				]
+			) |> List.concat)
+		) |> Option.default empty in
+
 		card ~cls:["music-card"] [
 			div ~a:[
 				a_class "global-button rounded-circle button-reload";
@@ -61,6 +83,7 @@ let view_music _instance =
 			];
 			music_controls;
 			volume_controls;
+			irank_controls;
 		]
 
 let view_job _instance =

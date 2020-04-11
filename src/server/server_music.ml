@@ -54,15 +54,18 @@ let delayed_stream (stream: 'a Lwt_stream.t Lwt.t) : 'a Lwt_stream.t =
 
 let player_events player =
 	let open Event in
-	let rec get_string key : OBus_value.V.single -> string R.std_result = let open OBus_value.V in function
+	let get_string key : OBus_value.V.single -> string R.std_result = let open OBus_value.V in function
 		| Basic (String v) -> Ok v
-		| Array (_typ, values) -> get_string_of_list key values
-		| Structure (values) -> get_string_of_list key values
 		| other -> Error (Sexp.Atom ("Unexpected dbus value for key " ^ key ^ ": " ^ (string_of_single other)))
-	and get_string_of_list key values =
-		values |> List.map (get_string key)
-			|> R.collect |> R.map (String.concat ~sep:", ")
 	in
+	let get_first_string key : OBus_value.V.single -> string R.std_result = let open OBus_value.V in function
+		| Array (_typ, values) -> values |> List.map (get_string key) |> R.collect |> R.map (function
+			| (head :: _) -> head
+			| [] -> ""
+		)
+		| other -> get_string key other
+	in
+
 	let set_artist track x = { track with artist = Some x } in
 	let set_title track x = { track with title = Some x } in
 	let play_status_change_event = function
@@ -77,8 +80,9 @@ let player_events player =
 		let current_track = map |> List.fold_left (fun track (key, value) ->
 			track |> R.bindr (fun track ->
 				match key with
-					| "xesam:artist" -> get_string key value |> R.map (set_artist track)
-					| "xesam:title" -> get_string key value |> R.map (set_title track)
+					| "xesam:artist" -> get_first_string key value |> R.map (set_artist track)
+					| "xesam:title" -> get_first_string key value |> R.map (set_title track)
+					| "xesam:comment" -> get_first_string key value |> R.map (fun comments -> Log.warn(fun m->m"GOT COMMENT: %s" comments); track)
 					| _ -> Ok track
 			)
 		) (Ok Music.unknown_track) in
@@ -222,6 +226,7 @@ let invoke state =
 		| Next -> music next
 		| Louder -> volume 1
 		| Quieter -> volume (-1)
+		| Rate rating -> failwith "TODO"
 	in
 	fun command -> invoke command |> Lwt.map (R.map (fun () -> None))
 

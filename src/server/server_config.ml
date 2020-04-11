@@ -21,6 +21,7 @@ type config = {
 	config_path: string;
 	jobs: job_configuration list;
 	music: music_configuration;
+	irank: bool;
 } [@@deriving sexp]
 
 open Sexp
@@ -56,6 +57,12 @@ let parse_config conf = function
 			parse_jobs jobs |> R.map (fun jobs -> { conf with jobs })
 	| List [Atom "mpris"; List names] ->
 			parse_strings names |> R.map (fun names -> { conf with music = { mpris_priority = names }})
+	| List [Atom "irank"; Atom value] as irank -> (
+			match value with
+				| "true" -> Ok { conf with irank = true }
+				| "false" -> Ok { conf with irank = false }
+				| _ -> unparseable irank
+	)
 	| other -> unparseable other
 
 let accum_config conf directive = R.bind conf (fun conf -> parse_config conf directive)
@@ -74,6 +81,7 @@ let load ~state_dir path =
 			state_directory = state_dir;
 			config_path = path;
 			jobs = [];
+			irank = false;
 			music = {
 				mpris_priority = [];
 			};

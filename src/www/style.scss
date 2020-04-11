@@ -1,6 +1,7 @@
 $fa-font-path:"webfonts";
 @import "scss/fontawesome.scss";
 @import "scss/solid.scss";
+@import "scss/regular.scss";
 
 
 body {
@@ -12,7 +13,7 @@ pre {
 	text-align: left;
 }
 
-.music-button, .global-button, .volume-button, .button {
+.music-button, .global-button, .volume-button, .button, .star-button {
 	cursor:pointer;
 	display: inline-block;
 	@extend %fa-icon;
@@ -196,17 +197,60 @@ pre {
 	}
 }
 
-/* var Button = (name) -> h.Span(' ', {'class':"glyphicon glyphicon-#{name}"}) .. buttonStyle; */
-
-/* var reconnectButtonStyle = @CSS('{display:block; margin:2em auto 2em auto; padding:1em; font-size:2em;}') */
-
-
 .card {
 	margin-bottom: 1em;
 }
 
 .music-card .card-body {
 	background-color: #eee;
+}
+
+.irank-ratings {
+	font-size: 1.5em;
+	// max-width: 600px;
+	margin: 20px auto 0 auto;
+	display:grid;
+	grid-template-columns: 1fr 1fr;
+	column-gap: 0.6em;
+	row-gap: 0.1em;
+	.rating-name {
+		color: #9d9d9d;
+		// border: 1px solid red;
+		text-align: right;
+		// grid-row-start: 1;
+	}
+
+	.rating-value {
+		// border: 1px solid green;
+		// grid-row-start: 2;
+		text-align: left;
+		white-space: nowrap;
+	}
+
+	.star-button {
+		color: #62666d;
+		padding: 0.2em 2px;
+		&.empty {
+			color: #b6b6b6;
+			@extend .far;
+		}
+		&:before {
+			content: fa-content($fa-var-star);
+		}
+		&:first-child {
+			opacity: 0.4;
+			font-size: 0.7em;
+			position: relative;
+			bottom: 0.06em;
+			&:before {
+				content: "\25cb";
+			}
+		}
+		&:hover {
+			color: black;
+			@extend .fas;
+		}
+	}
 }
 
 .job-card {
