@@ -28,10 +28,12 @@
     },
     "self": {
       "fetch": {
+        "ref": "HEAD",
         "relativePath": "."
       },
+      "ref": "HEAD",
       "relativePath": ".",
-      "type": "path"
+      "type": "git-local"
     },
     "vdoml": {
       "fetch": {
