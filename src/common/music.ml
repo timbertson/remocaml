@@ -3,12 +3,13 @@ open Sexplib.Std
 type track = {
 	artist: string option;
 	title: string option;
+	url: string option;
+	ratings: Irank.t option;
 } [@@deriving sexp]
 
 type state = {
 	playing: bool;
 	volume: float option;
-	irank: Irank.t option;
 	track: track;
 } [@@deriving sexp]
 
@@ -18,7 +19,7 @@ type command =
 	| Next
 	| Louder
 	| Quieter
-	| Rate of Irank.rating
+	| Rate of (string * Irank.rating)
 	[@@deriving sexp]
 
 type event =
@@ -30,13 +31,14 @@ type event =
 let unknown_track = {
 	artist = None;
 	title = None;
+	url = None;
+	ratings = None;
 }
 
 let init () = {
 	playing = false;
 	volume = None;
 	track = unknown_track;
-	irank = None;
 }
 
 let update state = function

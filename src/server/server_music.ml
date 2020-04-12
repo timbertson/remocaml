@@ -28,7 +28,6 @@ type peers = {
 
 type state = {
 	peers: peers sexp_opaque;
-	music_state: Music.state;
 } [@@deriving sexp_of]
 
 
@@ -52,7 +51,7 @@ let delayed_stream (stream: 'a Lwt_stream.t Lwt.t) : 'a Lwt_stream.t =
 	in
 	Lwt_stream.from next
 
-let player_events player =
+let player_events config player =
 	let open Event in
 	let get_string key : OBus_value.V.single -> string R.std_result = let open OBus_value.V in function
 		| Basic (String v) -> Ok v
@@ -68,6 +67,13 @@ let player_events player =
 
 	let set_artist track x = { track with artist = Some x } in
 	let set_title track x = { track with title = Some x } in
+	let set_url track x = { track with url = Some x } in
+	let apply_comment track comment =
+		{ track with ratings =
+			if config.Server_config.irank
+			then Some (Server_irank.parse comment)
+			else None
+		} in
 	let play_status_change_event = function
 		| "Playing" -> Ok (Music_event (Current_playing true))
 		| "Paused" | "Stopped" -> Ok (Music_event (Current_playing false))
@@ -82,7 +88,8 @@ let player_events player =
 				match key with
 					| "xesam:artist" -> get_first_string key value |> R.map (set_artist track)
 					| "xesam:title" -> get_first_string key value |> R.map (set_title track)
-					| "xesam:comment" -> get_first_string key value |> R.map (fun comments -> Log.warn(fun m->m"GOT COMMENT: %s" comments); track)
+					| "xesam:url" -> get_string key value |> R.map (set_url track)
+					| "xesam:comment" -> get_first_string key value |> R.map (apply_comment track)
 					| _ -> Ok track
 			)
 		) (Ok Music.unknown_track) in
@@ -178,11 +185,27 @@ let disconnected = {
 
 let init () = {
 	peers = disconnected;
-	music_state = Music.init ();
+	(* music_state = Music.init (); *)
 }
 
 let invoke state =
 	let open Rhythmbox_client.Org_mpris_MediaPlayer2_Player in
+	let rate (url, Irank.{rating_name; rating_value}) =
+		let uri = Uri.of_string url in
+		match Uri.scheme uri with
+			| Some "file" -> (
+				let path = Uri.path uri |> Uri.pct_decode in
+				let flag = Printf.sprintf "--%s=%d" rating_name rating_value in
+				let cmd = ["irank"; "batch"; "-f"; flag; path] in
+				let cmd_desc = String.concat ~sep:" " cmd in
+				Log.info (fun m->m"Running: %s" cmd_desc);
+				Lwt_process.exec ~stdin:`Close ("irank", cmd |> Array.of_list) |> Lwt.map (function
+					| Unix.WEXITED 0 -> Ok ()
+					| _ -> Error (Sexp.Atom ("Command failed: " ^ cmd_desc))
+				)
+			)
+			| _ -> Lwt.return (Error (Sexp.Atom ("Unsupported url: " ^ url)))
+	in
 	let music fn =
 		state.peers.player
 			|> Option.map (fun player -> R.wrap_lwt fn player)
@@ -226,7 +249,7 @@ let invoke state =
 		| Next -> music next
 		| Louder -> volume 1
 		| Quieter -> volume (-1)
-		| Rate rating -> failwith "TODO"
+		| Rate rating -> rate rating
 	in
 	fun command -> invoke command |> Lwt.map (R.map (fun () -> None))
 

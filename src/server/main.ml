@@ -29,9 +29,7 @@ let reconnect config state =
 		| Error err -> (Server_music.disconnected, [Error err])
 	) in
 	state := { current_state with
-		server_music_state = { current_state.Server_state.server_music_state with
-			peers;
-		}
+		server_music_state = { peers }
 	};
 	Lwt.return error_events
 
@@ -82,7 +80,7 @@ let handler ~config ~state ~static_cache ~static_root = fun conn req body ->
 				let open Server_music in
 				let peers = (!state).Server_state.server_music_state.peers in
 				Lwt_stream.choose (List.filter_map identity [
-					peers.player |> Option.map (Server_music.player_events);
+					peers.player |> Option.map (Server_music.player_events config);
 					peers.volume |> Option.map (Server_music.volume_events);
 				])
 			in

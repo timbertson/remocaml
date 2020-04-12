@@ -28,7 +28,7 @@ let load config =
 
 let client_state state =
 	State.({
-		music_state = state.server_music_state.music_state;
+		music_state = Music.init ();
 		job_state = {
 			jobs = state.server_jobs.jobs
 				|> StringMap.bindings
@@ -41,10 +41,10 @@ let client_state state =
 		};
 	})
 
-let invoke state_ref : Event.command -> Event.event list R.std_result Lwt.t =
-	let open Event in
+let invoke state_ref : Event.command -> Event.event list R.std_result Lwt.t = fun command ->
 	let state = !state_ref in
-	function
+	let open Event in
+	match command with
 	| Music_command cmd ->
 		Server_music.invoke state.server_music_state cmd |> Lwt.map (R.map Option.to_list)
 	| Job_command cmd ->

@@ -52,26 +52,28 @@ let view_music _instance =
 			]
 		) in
 
-		let rec rating_stars rating = function
+		let rec rating_stars url rating = function
 			| 6 -> []
 			| n ->
 				let open Irank in
 				let enabled = rating.rating_value >= n in
-				let action = emitter (Invoke (Music_command (Rate { rating with rating_value = n }))) in
+				let new_rating = { rating with rating_value = n } in
+				let action = emitter (Invoke (Music_command (Rate (url, new_rating)))) in
 				let star = span ~a:[
 					a_class_list ["star-button"; (if enabled then "full" else "empty")];
 					a_onclick action;
 				] [] in
-				star :: rating_stars rating (n+1)
+				star :: rating_stars url rating (n+1)
 		in
-		let irank_controls = state.irank |> Option.map (fun ratings ->
-			div ~a:[a_class "irank-ratings"] (ratings |> List.map (fun rating ->
-				[
-					span ~a:[a_class "rating-name"] [text rating.Irank.rating_name];
-					span ~a:[a_class "rating-value"] (rating_stars rating 0);
-				]
-			) |> List.concat)
-		) |> Option.default empty in
+		let irank_controls = match (state.track.url, state.track.ratings) with
+			| (Some url, Some ratings) ->
+				div ~a:[a_class "irank-ratings"] (ratings |> List.map (fun rating ->
+					[
+						span ~a:[a_class "rating-name"] [text rating.Irank.rating_name];
+						span ~a:[a_class "rating-value"] (rating_stars url rating 0);
+					]
+				) |> List.concat)
+			| _ -> empty in
 
 		card ~cls:["music-card"] [
 			div ~a:[

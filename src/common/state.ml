@@ -17,11 +17,12 @@ let fake () = let base = init () in { base with
 		track = {
 			artist = Some "Singy McGee";
 			title = Some "I can't believe it's not singing";
+			url = None;
+			ratings = Some Irank.[
+				{ rating_name = "Rating"; rating_value = 3 };
+				{ rating_name = "Pop"; rating_value = 5 };
+				{ rating_name = "Nostalgia"; rating_value = 0 };
+			]
 		};
-		irank = Some Irank.[
-			{ rating_name = "Rating"; rating_value = 3 };
-			{ rating_name = "Pop"; rating_value = 5 };
-			{ rating_name = "Nostalgia"; rating_value = 0 };
-		];
 	}
 }
