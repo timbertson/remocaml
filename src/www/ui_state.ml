@@ -47,6 +47,23 @@ let update state : event -> t = function
 		let server_state = Event.update state.server_state evt in
 		Log.info(fun m->m"updated; server state = %s" (Sexp.to_string (State.sexp_of_state server_state)));
 		{ state with server_state = server_state }
+	| Invoke (Music_command (Rate (_, new_rating))) ->
+			(* Because the feedback loop is quite slow (for rhythmbox to
+			 * notice the changed MP3 comment), we do client side prediction on
+			 * ratings changes *)
+			let open Irank in
+			let new_ratings = state.server_state.music_state.track.ratings |> Option.map (fun old ->
+				old |> List.map (fun old ->
+					if old.rating_name = new_rating.rating_name then new_rating else old
+				)
+			) in
+			{ state with server_state =
+				{ state.server_state with music_state =
+					{ state.server_state.music_state with track =
+						{ state.server_state.music_state.track with ratings = new_ratings }
+					}
+				}
+			}
 	| Reconnect | Invoke _ -> state
 
 let update state event = { (update state event) with log = match event with
