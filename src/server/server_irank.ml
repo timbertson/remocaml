@@ -4,7 +4,7 @@ open Astring
 
 module Log = (val (Logs.src_log (Logs.Src.create "server_irank")))
 
-let ratings = lazy (
+let rating_names = lazy (
 	let home = Unix.getenv "HOME" in
 	let config_path = Filename.concat home ".config/irank/ratings" in
 	let lines file =
@@ -20,6 +20,14 @@ let ratings = lazy (
 	let () = close_in file in
 	ratings
 )
+
+let blank_ratings () =
+	Lazy.force rating_names
+	|> List.map (fun name -> { rating_name = name; rating_value = 0 })
+
+let default config = if config.Server_config.irank
+	then Some (blank_ratings ())
+	else None
 
 open Str
 let rating_re = regexp "\\[[^]=]+=[0-5]\\]"
@@ -45,6 +53,6 @@ let parse comment : Irank.t =
 		| Delim s -> Some s
 		| Text _ -> None
 	) |> List.filter_map parse_rating in
-	Lazy.force ratings |> List.map (fun name ->
-		{ rating_name = name; rating_value = List.assoc_opt name parsed |> Option.default 0 }
+	blank_ratings () |> List.map (fun rating ->
+		{ rating with rating_value = List.assoc_opt rating.rating_name parsed |> Option.default 0 }
 	)

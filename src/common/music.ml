@@ -28,17 +28,17 @@ type event =
 	| Current_playing of bool
 	[@@deriving sexp]
 
-let unknown_track = {
+let unknown_track ~ratings () = {
 	artist = None;
 	title = None;
 	url = None;
-	ratings = None;
+	ratings = ratings;
 }
 
 let init () = {
 	playing = false;
 	volume = None;
-	track = unknown_track;
+	track = unknown_track ~ratings:None ();
 }
 
 let update state = function

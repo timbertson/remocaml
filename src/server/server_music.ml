@@ -68,12 +68,10 @@ let player_events config player =
 	let set_artist track x = { track with artist = Some x } in
 	let set_title track x = { track with title = Some x } in
 	let set_url track x = { track with url = Some x } in
-	let apply_comment track comment =
-		{ track with ratings =
-			if config.Server_config.irank
-			then Some (Server_irank.parse comment)
-			else None
-		} in
+	let apply_comment track comment = { track with
+		ratings = track.ratings |> Option.map (fun _ -> Server_irank.parse comment)
+	} in
+
 	let play_status_change_event = function
 		| "Playing" -> Ok (Music_event (Current_playing true))
 		| "Paused" | "Stopped" -> Ok (Music_event (Current_playing false))
@@ -92,7 +90,7 @@ let player_events config player =
 					| "xesam:comment" -> get_first_string key value |> R.map (apply_comment track)
 					| _ -> Ok track
 			)
-		) (Ok Music.unknown_track) in
+		) (Ok (Music.unknown_track ~ratings:(Server_irank.default config) ())) in
 		current_track |> R.map (fun track -> Music_event (Current_track track))
 	) in
 
