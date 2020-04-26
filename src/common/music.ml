@@ -19,7 +19,7 @@ type command =
 	| Next
 	| Louder
 	| Quieter
-	| Rate of (string * Irank.rating)
+	| Rate of (string * Irank.t)
 	[@@deriving sexp]
 
 type event =

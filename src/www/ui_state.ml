@@ -9,6 +9,7 @@ module Log = (val (Logs.src_log (Logs.Src.create "ui_state")))
 
 type t = {
 	server_state: State.state;
+	pending_ratings: (string * Irank.t) option;
 	error: Sexp.t option;
 	log: string option;
 	state_override: State.state option; (* used for testing *)
@@ -18,6 +19,7 @@ let init ~fake () = {
 	server_state = State.init ();
 	error = None;
 	log = None;
+	pending_ratings = None;
 	state_override = if fake then Some (State.fake ()) else None;
 }
 
@@ -27,6 +29,7 @@ let eq : t -> t -> bool = fun a b ->
 	in
 	Fields.for_all
 		~server_state:(use (=))
+		~pending_ratings:(use (=))
 		~state_override:(use (=))
 		~error:(use (=))
 		~log:(use (=))
@@ -37,6 +40,7 @@ let sexp_of_event_result = R.sexp_of_result Event.sexp_of_event
 type event =
 	| Reconnect
 	| Server_event of event_result
+	| Pending_rating of (string * Irank.rating) option
 	| Invoke of Event.command
 	[@@deriving sexp_of]
 
@@ -46,34 +50,43 @@ let update state : event -> t = function
 		Log.info(fun m->m"applying server event: %s" (Sexp.to_string (Event.sexp_of_event evt)));
 		let server_state = Event.update state.server_state evt in
 		Log.info(fun m->m"updated; server state = %s" (Sexp.to_string (State.sexp_of_state server_state)));
-		{ state with server_state = server_state }
-	| Invoke (Music_command (Rate (_, new_rating))) ->
-			(* Because the feedback loop is quite slow (for rhythmbox to
-			 * notice the changed MP3 comment), we do client side prediction on
-			 * ratings changes *)
-			let open Irank in
-			let new_ratings = state.server_state.music_state.track.ratings |> Option.map (fun old ->
-				old |> List.map (fun old ->
-					if old.rating_name = new_rating.rating_name then new_rating else old
-				)
-			) in
-			{ state with server_state =
-				{ state.server_state with music_state =
-					{ state.server_state.music_state with track =
-						{ state.server_state.music_state.track with ratings = new_ratings }
-					}
-				}
-			}
+		let pending_ratings_override = state.pending_ratings |> Option.bind (fun (pending_url, pending_ratings) ->
+			match evt with
+				(* on `Current_track` with pending ratings, clear any which now match the server state *)
+				| Music_event (Current_track track) when track.url = Some pending_url ->
+					let server_ratings = track.ratings |> Option.default [] in
+					let pending_ratings = pending_ratings |> List.filter (fun pending -> not (List.mem pending server_ratings)) in
+					Some (if pending_ratings = [] then None else (Some (pending_url, pending_ratings)))
+				| _ -> None
+		) in
+		{ state with
+			server_state = server_state;
+			pending_ratings = pending_ratings_override |> Option.default state.pending_ratings
+		}
+
+	| Pending_rating None -> { state with pending_ratings = None }
+	| Pending_rating (Some (url, new_rating)) ->
+		let open Irank in
+		let pending_ratings = match state.pending_ratings with
+			| Some (pending_url, pending_ratings) when url = pending_url ->
+					let remaining_ratings = pending_ratings |> List.filter (fun rating ->
+						rating.rating_name <> new_rating.rating_name
+					) in
+					(url, new_rating :: remaining_ratings)
+			| _ -> (url, [new_rating])
+		in
+		{ state with pending_ratings = Some pending_ratings }
+
 	| Reconnect | Invoke _ -> state
 
 let update state event = { (update state event) with log = match event with
 	| Server_event _ -> Some (Sexp.to_string (sexp_of_event event))
-	| Reconnect | Invoke _ -> state.log
+	| Reconnect | Invoke _ | Pending_rating _ -> state.log
 }
 
 let command instance = fun _state -> function
 	| Reconnect -> assert false
-	| Server_event _ -> None
+	| Server_event _ | Pending_rating _ -> None
 	| Invoke command -> Some (
 			let payload = (Sexp.to_string (Event.sexp_of_command command)) in
 			Log.info (fun m->m"invoking command: %s" payload);

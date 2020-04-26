@@ -188,13 +188,16 @@ let init () = {
 
 let invoke state =
 	let open Rhythmbox_client.Org_mpris_MediaPlayer2_Player in
-	let rate (url, Irank.{rating_name; rating_value}) =
+	let rate (url, ratings) =
 		let uri = Uri.of_string url in
 		match Uri.scheme uri with
 			| Some "file" -> (
 				let path = Uri.path uri |> Uri.pct_decode in
-				let flag = Printf.sprintf "--%s=%d" rating_name rating_value in
-				let cmd = ["irank"; "batch"; "-f"; flag; path] in
+				
+				let flags = ratings |> List.map (fun Irank.{rating_name; rating_value} ->
+					Printf.sprintf "--%s=%d" rating_name rating_value
+				) in
+				let cmd = ["irank"; "batch"; "-f" ] @ flags @ [ path ] in
 				let cmd_desc = String.concat ~sep:" " cmd in
 				Log.info (fun m->m"Running: %s" cmd_desc);
 				Lwt_process.exec ~stdin:`Close ("irank", cmd |> Array.of_list) |> Lwt.map (function
@@ -247,7 +250,7 @@ let invoke state =
 		| Next -> music next
 		| Louder -> volume 1
 		| Quieter -> volume (-1)
-		| Rate rating -> rate rating
+		| Rate ratings -> rate ratings
 	in
 	fun command -> invoke command |> Lwt.map (R.map (fun () -> None))
 

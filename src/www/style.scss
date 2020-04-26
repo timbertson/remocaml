@@ -13,28 +13,39 @@ pre {
 	text-align: left;
 }
 
-.music-button, .global-button, .volume-button, .button, .star-button {
+.music-button, .global-button, .volume-button, .button, .star-button, .irank-button {
 	cursor:pointer;
 	display: inline-block;
 	@extend %fa-icon;
 	@extend .fas;
+
+	text-align:center;
+	margin: 2px;
+	border-radius: 1em;
 }
 
 .music-button, .job-card .button {
-	display:inline-block;
 	height:2em;
 	width:2em;
 	line-height:2em;
-	text-align:center;
-	margin: 2px;
 }
 
-.music-button {
-	font-size:1.8em;
-	background: rgb(87, 131, 197);
-	color:white;
-	margin-top: 10px;
-	margin-bottom: 5px;
+.music-card {
+	.action-button, .global-button {
+		padding: 0.5em;
+		color: white;
+		background: #878787;
+		margin-bottom:0.5em;
+		font-size: 1em;
+	}
+
+	.music-button {
+		font-size:1.8em;
+		background: rgb(87, 131, 197);
+		color:white;
+		margin-top: 10px;
+		margin-bottom: 5px;
+	}
 }
 
 
@@ -93,38 +104,6 @@ pre {
 }
 
 .job-card {
-	//padding: 0 1em;
-	// .task h3 {
-	// 	background: rgb(87, 87, 87);
-	// 	border-radius: 10px;
-	// 	border-bottom-right-radius: 0;
-	// 	border-bottom-left-radius: 0;
-	// 	margin: 0;
-	// 	padding: 0.3em;
-	// 	margin-top:1em;
-	// 	border-bottom: 1px solid rgb(116, 116, 116);
-	// 	font-size: 1.4em;
-	// 	font-weight: bold;
-	// }
-  //
-	// .task .invisible {
-	// 	visibility: hidden;
-	// }
-  //
-	// .task.running h3 {
-	// 	background: rgb(48, 134, 26);
-	// 	border-color: rgb(91, 173, 70);
-	// }
-  //
-	// .task .ctl {
-	// 	clear: both;
-	// 	padding: 0.5em;
-	// 	padding-bottom: 1em;
-	// 	padding-top: 0;
-	// 	background: #333;
-	// 	margin: 0 0 2em 0;
-	// }
-  //
 	.output {
 		margin: 0; padding:0;
 		whitespace:pre;
@@ -139,12 +118,6 @@ pre {
 		transition-duration: 0.5s;
 		transition-timing-function: ease-in-out;
 	}
-
-	// .task .kill {
-	// 	background: rgb(228, 66, 66);
-	// 	margin-right:1em;
-	// 	float: right;
-	// }
 }
 
 .section {
@@ -155,7 +128,6 @@ pre {
 	position:relative;
 	border-radius: 10px;
 	border: 1px solid rgb(128, 128, 128);
-	//margin: 1em;
 }
 
 .section h2 {
@@ -179,12 +151,6 @@ pre {
 	position: absolute;
 	top: 10px;
 	right: 10px;
-
-	padding: 0.5em;
-	color: white;
-	background: #878787;
-	margin-bottom:0.5em;
-	font-size: 1em;
 }
 .button-reload:before { content: fa-content($fa-var-redo); }
 
@@ -206,51 +172,91 @@ pre {
 }
 
 .irank-ratings {
-	font-size: 1.5em;
-	// max-width: 600px;
-	margin: 20px auto 0 auto;
-	display:grid;
-	grid-template-columns: 1fr 1fr;
-	column-gap: 0.6em;
-	row-gap: 0.1em;
-	.rating-name {
-		color: #9d9d9d;
-		// border: 1px solid red;
-		text-align: right;
-		// grid-row-start: 1;
+	position: relative;
+	.actions {
+		position: absolute;
+		top: 10px;
+		left: 10px;
+		.button {
+			height:2.1em;
+			width:2.1em;
+			display:block;
+			margin-bottom: 1em;
+		}
+		.button-save {
+			background: #5783c5;
+			&:before { content: fa-content($fa-var-check); }
+		}
+
+		.button-cancel {
+			background: #e6adad;
+			&:before { content: fa-content($fa-var-times); }
+		}
 	}
 
-	.rating-value {
-		// border: 1px solid green;
-		// grid-row-start: 2;
-		text-align: left;
-		white-space: nowrap;
-	}
+	.grid {
+		font-size: 1.5em;
+		// max-width: 600px;
+		margin: 20px auto 0 auto;
+		display:grid;
+		grid-template-columns: 1fr 1fr;
+		// column-gap: 0.6em;
+		// row-gap: 0.1em;
+		.rating-name, .rating-value {
+			padding-top: 0.05em;
+			padding-bottom: 0.05em;
+		}
+		.rating-name {
+			color: #9d9d9d;
+			padding-right: 0.6em;
+			// border: 1px solid red;
+			text-align: right;
+			// grid-row-start: 1;
+		}
 
-	.star-button {
-		color: #62666d;
-		padding: 0.2em 2px;
-		&.empty {
-			color: #b6b6b6;
-			@extend .far;
+		.rating-value {
+			// border: 1px solid green;
+			// grid-row-start: 2;
+			text-align: left;
+			white-space: nowrap;
 		}
-		&:before {
-			content: fa-content($fa-var-star);
-		}
-		&:first-child {
-			opacity: 0.4;
-			font-size: 0.7em;
-			position: relative;
-			bottom: 0.06em;
+
+		.star-button {
+			color: #62666d;
+			padding: 0.2em 2px;
+			&.empty {
+				color: #b6b6b6;
+				@extend .far;
+			}
 			&:before {
-				content: "\25cb";
+				content: fa-content($fa-var-star);
+			}
+			&:first-child {
+				opacity: 0.4;
+				font-size: 0.7em;
+				position: relative;
+				bottom: 0.06em;
+				&:before {
+					content: "\25cb";
+				}
+			}
+			&:hover {
+				color: black;
+				@extend .fas;
+			}
+			&:active {
+				color: #62666d;
 			}
 		}
-		&:hover {
-			color: black;
-			@extend .fas;
+
+		.pending {
+			opacity: 0.5;
+			background: #fff;
+			// color: #ad3c3c;
+			// background: #f8f8f8;
 		}
 	}
+
 }
 
 .job-card {
