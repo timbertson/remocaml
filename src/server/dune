@@ -1,9 +1,7 @@
 ; vim: set syntax=lisp commentstring=;\ %s:
-(executable
-	; (allow_overlapping_dependencies)
+(library
 	(flags (:include ../flags))
-	(name main)
-	(public_name remocaml)
+	(name remo_server)
 	(libraries
 		remo_common
 		astring
@@ -20,7 +18,5 @@
 
 (alias
 	(name all)
-	(deps
-		main.exe
-	)
+	(deps remo_server)
 )

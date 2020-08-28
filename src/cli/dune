@@ -1,0 +1,32 @@
+; vim: set syntax=lisp commentstring=;\ %s:
+(executable
+	(flags (:include ../flags))
+	(name remocaml)
+	(public_name remocaml)
+	(modules remocaml)
+	(libraries
+		remo_common
+		remo_server
+	)
+	(preprocess (pps ppx_sexp_conv ppx_fields_conv lwt_ppx))
+)
+
+(executable
+	(flags (:include ../flags))
+	(name irank_mpris)
+	(public_name irank-mpris)
+	(modules irank_mpris)
+	(libraries
+		remo_common
+		remo_server
+	)
+	(preprocess (pps ppx_sexp_conv ppx_fields_conv lwt_ppx))
+)
+
+(alias
+	(name all)
+	(deps
+		remocaml.exe
+		irank_mpris.exe
+	)
+)

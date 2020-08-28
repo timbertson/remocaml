@@ -6,6 +6,7 @@
 		remo_common
 		js_of_ocaml
 		js_of_ocaml-lwt
+		js_of_ocaml-ppx
 		; js_of_ocaml.weak
 		lwt_react
 		logs
@@ -17,7 +18,7 @@
 	(js_of_ocaml
 		(flags (:standard --source-map))
 	)
-	(preprocess (pps lwt_ppx ppx_sexp_conv ppx_fields_conv js_of_ocaml.ppx))
+	(preprocess (pps lwt_ppx ppx_sexp_conv ppx_fields_conv js_of_ocaml-ppx))
 )
 
 (rule

@@ -51,7 +51,7 @@ let delayed_stream (stream: 'a Lwt_stream.t Lwt.t) : 'a Lwt_stream.t =
 	in
 	Lwt_stream.from next
 
-let player_events config player =
+let player_events ~(default_ratings:Irank.t option) player =
 	let open Event in
 	let get_string key : OBus_value.V.single -> string R.std_result = let open OBus_value.V in function
 		| Basic (String v) -> Ok v
@@ -90,7 +90,7 @@ let player_events config player =
 					| "xesam:comment" -> get_first_string key value |> R.map (apply_comment track)
 					| _ -> Ok track
 			)
-		) (Ok (Music.unknown_track ~ratings:(Server_irank.default config) ())) in
+		) (Ok (Music.unknown_track ~ratings:default_ratings ())) in
 		current_track |> R.map (fun track -> Music_event (Current_track track))
 	) in
 

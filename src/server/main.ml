@@ -80,7 +80,7 @@ let handler ~config ~state ~static_cache ~static_root = fun conn req body ->
 				let open Server_music in
 				let peers = (!state).Server_state.server_music_state.peers in
 				Lwt_stream.choose (List.filter_map identity [
-					peers.player |> Option.map (Server_music.player_events config);
+					peers.player |> Option.map (Server_music.player_events ~default_ratings:(Server_irank.default config));
 					peers.volume |> Option.map (Server_music.volume_events);
 				])
 			in
@@ -187,7 +187,7 @@ let init_logs () =
 let getenv key =
 	try Some (Unix.getenv key) with Not_found -> None
 
-let () =
+let main () =
 	init_logs ();
 
 	let ephemeral = match getenv "REMOCAML_EPHEMERAL" |> Option.default "false" with
