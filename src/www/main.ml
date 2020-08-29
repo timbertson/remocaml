@@ -2,7 +2,6 @@ open Vdoml
 open Remo_common
 module R = Rresult_ext
 module Log = (val (Logs.src_log (Logs.Src.create "main")))
-open Pervasives
 open Js_of_ocaml
 
 open Sexplib

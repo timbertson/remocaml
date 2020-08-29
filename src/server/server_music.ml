@@ -27,7 +27,7 @@ type peers = {
 }
 
 type state = {
-	peers: peers sexp_opaque;
+	peers: (peers [@sexp.opaque]);
 } [@@deriving sexp_of]
 
 

@@ -29,8 +29,8 @@ let devnull = Unix.(openfile "/dev/null" [O_RDONLY; O_CLOEXEC]) 0o600
 type job_execution = {
 	job_id: string;
 	pid: int;
-	termination: int Lwt.t sexp_opaque;
-	output_watch: unit Lwt.t option sexp_opaque;
+	termination: (int Lwt.t [@sexp.opaque]);
+	output_watch: (unit Lwt.t option [@sexp.opaque]);
 } [@@deriving sexp_of]
 
 let id_of_job_execution ex = ex.job_id
@@ -52,8 +52,8 @@ let sexp_of_jobs = fun map ->
 type state = {
 	jobs: jobs;
 	dir: string;
-	events: Event.event R.std_result E.t sexp_opaque;
-	emit: (Job.event R.std_result -> unit) sexp_opaque;
+	events: (Event.event R.std_result E.t [@sexp.opaque]);
+	emit: ((Job.event R.std_result -> unit) [@sexp.opaque]);
 } [@@deriving sexp_of]
 
 
