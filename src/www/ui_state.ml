@@ -4,6 +4,7 @@ open Sexplib
 open Sexplib.Std
 open Fieldslib
 open Js_of_ocaml
+open Js_of_ocaml_lwt
 
 module Log = (val (Logs.src_log (Logs.Src.create "ui_state")))
 
@@ -105,7 +106,7 @@ let command instance = fun _state -> function
 				| Some (Https u) -> Https (relative_url u)
 				| _ -> failwith "invalid URL"
 			in
-			let%lwt response = Lwt_xmlHttpRequest.perform
+			let%lwt response = XmlHttpRequest.perform
 				~contents:(`String payload)
 				dest
 			in
