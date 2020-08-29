@@ -52,9 +52,7 @@ let view_music _instance =
 			]
 		) in
 
-		let rec rating_stars url rating = function
-			| 6 -> []
-			| n ->
+		let rec rating_stars url rating n = if n > Irank.stars then [] else
 				let open Irank in
 				let enabled = rating.rating_value >= n in
 				let new_rating = { rating with rating_value = n } in

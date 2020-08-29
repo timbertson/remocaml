@@ -7,4 +7,6 @@ type rating = {
 
 let find name ratings = List.find_opt (fun rating -> rating.rating_name = name) ratings
 
+let stars = 5
+
 type t = rating list [@@deriving sexp]
