@@ -80,19 +80,19 @@ let run () =
 			| _ -> Error (Sexp.Atom "Got a non-music event...")
 			))
 	in
-	let commands = Lwt_io.(read_lines stdin) |> Lwt_stream.map (function
+
+
+	(* We can't use Lwt_stream of inlut lines here, because it would
+	   keep reading in the background, stealing input from e.g. irank-edit *)
+	let get_command () = Lwt_io.(read_line stdin) |> Lwt.map (function
 		| "" -> Ok Edit
 		| "y" -> Ok Discard
 		| "d" -> Ok Delete
 		| "k" -> Ok Keep
 		| other -> Error (Sexp.Atom ("Unknown input: " ^ other))
 	) in
-
-	Lwt_stream.choose [music_events; commands] |> Lwt_stream.iter_s (fun event ->
-		let%lwt _ = match Logs.level () with
-			| Some Logs.Debug -> Lwt.return_unit
-			| _ -> Lwt_process.exec ("clear", [| "clear" |]) |> Lwt.map ignore
-		in
+	let get_music_event () = music_events |> Lwt_stream.next in
+	let rec loop () = Lwt.bind (Lwt.pick [get_command (); get_music_event () ]) (fun event ->
 		Logs.debug (fun m->m "Applying event: %s" (Sexp.to_string (R.sexp_of_result sexp_of_input event)));
 		let%lwt result = match event with
 			| Ok (Music_event event) ->
@@ -104,12 +104,17 @@ let run () =
 			| Ok (Keep) -> run_irank_cmd (!state).track "keep"
 			| (Error _) as err -> Lwt.return err
 		in
+		let%lwt _ = match Logs.level () with
+			| Some Logs.Debug -> Lwt.return_unit
+			| _ -> Lwt_process.exec ("clear", [| "clear" |]) |> Lwt.map ignore
+		in
 		render !state;
 		result |> Result.iter_error (fun e ->
 			print_endline "------";
 			print_endline ("Error: " ^ (Sexp.to_string e))
 		);
-		Lwt.return_unit
-	)
+		loop ()
+	) in
+	loop ()
 
 let () = Lwt_main.run (run ())
