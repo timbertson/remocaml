@@ -2,6 +2,7 @@ open Remo_common
 module R = Rresult_ext
 open Sexplib
 open Sexplib.Std
+module Unix = Unix_ext
 module Log = (val (Logs.src_log (Logs.Src.create "server_config")))
 
 type job_configuration = {
@@ -66,6 +67,15 @@ let parse_config conf = function
 	| other -> unparseable other
 
 let accum_config conf directive = R.bind conf (fun conf -> parse_config conf directive)
+
+
+let home = Unix.getenv_opt "HOME" |> Option.force
+
+let state_dir =
+	let runtime_dir = Unix.getenv_opt "XDG_RUNTIME_DIR" |> Option.default "/tmp" in
+	Unix.getenv_opt "REMOCAML_STATE" |> Option.default (Filename.concat runtime_dir "remocaml")
+	
+let config_path = Unix.getenv_opt "REMOCAML_CONFIG" |> Option.default (Filename.concat home ".config/remocaml/config.sexp")
 
 let load ~state_dir path =
 	let load_file path =

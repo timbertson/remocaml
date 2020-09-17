@@ -13,3 +13,5 @@ let ensure_unlinked path =
 		unlink path
 	with Unix_error (ENOENT, _, _) -> ()
 	
+let getenv_opt key =
+	try Some (Unix.getenv key) with Not_found -> None

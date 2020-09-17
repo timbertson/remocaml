@@ -4,10 +4,6 @@ open Util
 open Server_music
 open Sexplib
 
-let debug _msg =
-	()
-	(* print_endline _msg *)
-
 let rating_width = lazy (
 	let names = Lazy.force Server_irank.rating_names in
 	names |> List.map String.length |> List.fold_left max 0
@@ -26,7 +22,7 @@ let path_of_track t = t.Music.url |> Option.bind (fun url ->
 )
 
 let render state =
-	debug "rendering...";
+	Logs.debug (fun m->m"rendering...");
 	let open Music in
 	let open Irank in
 	let track = state.track in
@@ -62,7 +58,7 @@ let run_irank_cmd track action =
 	match path_of_track track with
 		| None -> Lwt.return (Error (Sexp.Atom "No current track"))
 		| Some path ->
-			debug (Printf.sprintf "+ %s %s %s" irank action path);
+			Logs.debug (fun m->m "+ %s %s %s" irank action path);
 			Lwt_process.exec (irank, [| irank; action; path |]) |> Lwt.map (function
 			| WEXITED 0 -> Ok ()
 			| WEXITED nonzero -> failed "exit-status" nonzero
@@ -71,7 +67,9 @@ let run_irank_cmd track action =
 		)
 	
 let run () =
-	let music_config = Server_config.({ mpris_priority = [] }) in
+	Server_logs.init ();
+	let config = Server_config.(load ~state_dir config_path) |> R.force in
+	let music_config = config.music in
 	let%lwt bus = OBus_bus.session () in
 	let%lwt player = first_mpris_service music_config bus in
 	let%lwt player = player |> Option.fold (Lwt.fail_with "No player found") Lwt.return in
@@ -91,8 +89,11 @@ let run () =
 	) in
 
 	Lwt_stream.choose [music_events; commands] |> Lwt_stream.iter_s (fun event ->
-		let%lwt _ = Lwt_process.exec ("clear", [| "clear" |]) in
-		debug ("Applying event: " ^ (Sexp.to_string (R.sexp_of_result sexp_of_input event)));
+		let%lwt _ = match Logs.level () with
+			| Some Logs.Debug -> Lwt.return_unit
+			| _ -> Lwt_process.exec ("clear", [| "clear" |]) |> Lwt.map ignore
+		in
+		Logs.debug (fun m->m "Applying event: %s" (Sexp.to_string (R.sexp_of_result sexp_of_input event)));
 		let%lwt result = match event with
 			| Ok (Music_event event) ->
 				state := Music.update !state event;

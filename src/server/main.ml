@@ -7,6 +7,7 @@ open Astring
 module List = List_ext
 open Util
 module R = Rresult_ext
+module Unix = Unix_ext
 module Log = (val (Logs.src_log (Logs.Src.create "main")))
 
 module StringSet = Set.Make(String)
@@ -155,54 +156,16 @@ let read_entire_file path =
 		raise e
 	)
 
-let init_logs () =
-	Logs.set_level (
-		try (Unix.getenv "LOG_LEVEL" |> Logs.level_of_string |> R.get_ok) with _ -> Some (Logs.Info)
-	);
-	(* Quiet, cohttp *)
-	Logs.Src.list () |> List.iter (fun src ->
-		if String.is_prefix ~affix:"cohttp." (Logs.Src.name src) then
-			Logs.Src.set_level src (Some Info)
-	);
-	let tagging_reporter parent =
-		{ Logs.report = (fun src level ~over k user_msgf ->
-			if (Logs.Src.equal src Logs.default || level = Logs.App) then
-				parent.Logs.report src level ~over k user_msgf
-			else
-				parent.Logs.report src level ~over k (fun outer_msgf ->
-					user_msgf (fun ?header ?tags fmt ->
-						outer_msgf ?header ?tags ("[%a %s] @[" ^^ fmt ^^ "@]")
-							Logs.pp_level level
-							(Logs.Src.name src)
-					)
-			)
-		)}
-	in
-	let default_reporter =
-		let pp_header _ _ = () in
-		Logs.format_reporter ~pp_header ()
-	in
-	Logs.set_reporter (tagging_reporter default_reporter)
-
-let getenv key =
-	try Some (Unix.getenv key) with Not_found -> None
-
 let main () =
-	init_logs ();
-
-	let ephemeral = match getenv "REMOCAML_EPHEMERAL" |> Option.default "false" with
+	Server_logs.init();
+	let ephemeral = match Unix.getenv_opt "REMOCAML_EPHEMERAL" |> Option.default "false" with
 		| "false" -> None
 		| "true" -> Some(20)
 		| seconds -> Some(int_of_string seconds)
 	in
 	Connections.Timeout.set_ephemeral ephemeral;
 
-	let home = getenv "HOME" |> Option.force in
-	let config_path = getenv "REMOCAML_CONFIG" |> Option.default (Filename.concat home ".config/remocaml/config.sexp") in
-	let runtime_dir = getenv "XDG_RUNTIME_DIR" |> Option.default "/tmp" in
-	let state_dir = getenv "REMOCAML_STATE" |> Option.default (Filename.concat runtime_dir "remocaml") in
-
-	let static_root = match getenv "REMOCAML_STATIC" with
+	let static_root = match Unix.getenv_opt "REMOCAML_STATIC" with
 		| Some dir -> dir
 		| None ->
 			let self = Sys.argv.(0) in
@@ -219,7 +182,7 @@ let main () =
 			)
 	in
 
-	let config = Server_config.load ~state_dir config_path |> R.force in
+	let config = Server_config.(load ~state_dir config_path) |> R.force in
 	let server_state = Server_state.load config |> R.force in
 	Log.debug(fun m->m"server state: %s" (Server_state.sexp_of_state server_state |> Sexp.to_string));
 
@@ -231,9 +194,9 @@ let main () =
 	let state = ref server_state in
 	let callback = handler ~config ~static_cache ~static_root ~state in
 	let mode = `TCP (
-		if getenv "LISTEN_PID" |> Option.fold false (fun listen -> listen = string_of_int (Unix.getpid ()))
+		if Unix.getenv_opt "LISTEN_PID" |> Option.fold false (fun listen -> listen = string_of_int (Unix.getpid ()))
 		then `Socket (Lwt_unix.of_unix_file_descr ((Obj.magic 3) : Unix.file_descr))
-		else `Port (getenv "REMOCAML_PORT" |> Option.map int_of_string |> Option.default 8000)
+		else `Port (Unix.getenv_opt "REMOCAML_PORT" |> Option.map int_of_string |> Option.default 8000)
 	) in
 	Log.info (fun m->m "Listening on %s" (match mode with
 		| `TCP (`Socket _) -> "<inherited systemd socket>"
