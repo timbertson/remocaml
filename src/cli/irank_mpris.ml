@@ -117,4 +117,6 @@ let run () =
 	) in
 	loop ()
 
-let () = Lwt_main.run (run ())
+let () = try
+	Lwt_main.run (run ())
+with End_of_file -> ()

@@ -15,6 +15,6 @@ depends: [
   "rresult"
 ]
 depexts: [
-  ["sassc"] {os-distribution = "nixpkgs"}
+  ["sassc"] {os-distribution = "nixos"}
 ]
 build: [ "dune" "build" "-p" "remocaml" ]
