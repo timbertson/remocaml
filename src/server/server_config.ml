@@ -15,6 +15,7 @@ let id_of_job_configuration job = job.job.Job.id
 
 type music_configuration = {
 	mpris_priority: string list;
+	encourage_rating: string list;
 } [@@deriving sexp]
 
 type config = {
@@ -57,7 +58,9 @@ let parse_config conf = function
 	| List [Atom "jobs"; List jobs] ->
 			parse_jobs jobs |> R.map (fun jobs -> { conf with jobs })
 	| List [Atom "mpris"; List names] ->
-			parse_strings names |> R.map (fun names -> { conf with music = { mpris_priority = names }})
+			parse_strings names |> R.map (fun names -> { conf with music = { conf.music with mpris_priority = names }})
+	| List [Atom "encourage-rating"; List names] ->
+			parse_strings names |> R.map (fun names -> { conf with music = { conf.music with encourage_rating = names }})
 	| List [Atom "irank"; Atom value] as irank -> (
 			match value with
 				| "true" -> Ok { conf with irank = true }
@@ -94,6 +97,7 @@ let load ~state_dir path =
 			irank = false;
 			music = {
 				mpris_priority = [];
+				encourage_rating = [];
 			};
 		} in
 		config |> List.fold_left accum_config (Ok initial_config)

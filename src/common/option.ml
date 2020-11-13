@@ -23,13 +23,6 @@ let print_str sub_printer () v = match v with
 let print = print_str
 let to_string sub = print_str (fun () -> sub) ()
 let to_list = function Some x -> [x] | None -> []
-let pp sub formatter = function
-	| Some v ->
-		Format.pp_print_string formatter "Some(";
-		sub formatter v;
-		Format.pp_print_string formatter ")"
-	| None ->
-		Format.pp_print_string formatter "None"
 
 let bind fn opt = match opt with
 	| Some v -> fn v
