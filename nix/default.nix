@@ -1,6 +1,6 @@
 { pkgs, stdenv, lib, opam2nix, vdoml, self }:
 let
-	ocaml = pkgs.ocaml-ng.ocamlPackages_4_10.ocaml;
+	ocaml = pkgs.ocaml-ng.ocamlPackages_4_12.ocaml;
 	opamArgs = {
 		inherit ocaml;
 		src = {
