@@ -212,9 +212,9 @@ let invoke state =
 			|> Option.map (fun player -> R.wrap_lwt fn player)
 			|> Option.default_fn (fun () -> Lwt.return (Ok ()))
 	in
-	let volume direction =
-		state.peers.volume
-			|> Option.map (fun volume : unit R.std_result Lwt.t ->
+	let volume direction : unit R.std_result Lwt.t = (
+		match state.peers.volume with
+			| Some volume -> (
 				R.wrap_lwt (fun { pa_device; _ } : unit Lwt.t ->
 					let open Pulseaudio_client.Org_PulseAudio_Core1_Device in
 					let%lwt (max, vol) = Lwt.zip
@@ -242,7 +242,18 @@ let invoke state =
 					OBus_property.set (volume pa_device) updated
 				) volume
 			)
-			|> Option.default_fn (fun () -> Lwt.return (Ok ()))
+			| None -> (
+				(* without a DBus volume, we can still try `amixer` CLI: *)
+				(* amixer -D pipewire sset Master 1%- *)
+				let volume_diff = if direction > 0 then "1%+" else "1%-" in
+				let cmd = ("amixer", [|"amixer"; "-D"; "pipewire"; "sset"; "Master"; volume_diff |]) in
+				R.wrap_lwt (Lwt_process.exec ~stdin:`Dev_null) cmd
+				|> Lwt.map (R.bindr (function
+					| Unix.WEXITED 0 -> Ok ()
+					| other -> Error (Sexp.Atom "amixer command failed")
+				))
+			)
+	)
 	in
 	let invoke = function
 		| Previous -> music previous
@@ -254,28 +265,35 @@ let invoke state =
 	in
 	fun command -> invoke command |> Lwt.map (R.map (fun () -> None))
 
-let discover_volume_device session_bus : volume Lwt.t =
-	let%lwt (address:string) = (
-		let%lwt peer = OBus_bus.get_peer session_bus "org.PulseAudio1" in
-		let proxy = OBus_proxy.make ~peer ~path:(OBus_path.of_string "/org/pulseaudio/server_lookup1") in
-		Pulseaudio_client.Org_PulseAudio_ServerLookup1.address proxy |> OBus_property.get
-	)
-	in
+let discover_volume_device session_bus : volume option Lwt.t =
+	Log.debug (fun m -> m"Discovering volume device");
+	try%lwt (
+		let%lwt (address:string) = (
+			let%lwt peer = OBus_bus.get_peer session_bus "org.PulseAudio1" in
+			let proxy = OBus_proxy.make ~peer ~path:(OBus_path.of_string "/org/pulseaudio/server_lookup1") in
+			Pulseaudio_client.Org_PulseAudio_ServerLookup1.address proxy |> OBus_property.get
+		)
+		in
 
-	(* now connect to the server directly *)
-	let%lwt conn = OBus_connection.of_addresses ~shared:true (OBus_address.of_string address) in
-	let pa_peer = OBus_peer.make ~connection:conn ~name:("org.PulseAudio.Core1") in
-	let pa_core = OBus_proxy.make ~peer:pa_peer ~path:(OBus_path.of_string "/org/pulseaudio/core1") in
-	let%lwt pa_device = Pulseaudio_client.Org_PulseAudio_Core1.fallback_sink pa_core |> OBus_property.get in
-	Lwt.return { pa_core; pa_device }
+		(* now connect to the server directly *)
+		let%lwt conn = OBus_connection.of_addresses ~shared:true (OBus_address.of_string address) in
+		let pa_peer = OBus_peer.make ~connection:conn ~name:("org.PulseAudio.Core1") in
+		let pa_core = OBus_proxy.make ~peer:pa_peer ~path:(OBus_path.of_string "/org/pulseaudio/core1") in
+		let%lwt pa_device = Pulseaudio_client.Org_PulseAudio_Core1.fallback_sink pa_core |> OBus_property.get in
+		Lwt.return (Some { pa_core; pa_device })
+	) with err -> (
+		Log.err(fun m->m"Failed to discover volume device: %s" (Printexc.to_string err));
+		Lwt.return None
+	)
 
 let connect config =
 	let%lwt bus = OBus_bus.session () in
+	Log.debug (fun m -> m"Got session bus");
 	let%lwt (player, volume) = Lwt.zip
 		(first_mpris_service config bus)
 		(discover_volume_device bus)
 	in
 	Lwt.return {
-		volume = Some volume;
+		volume;
 		player;
 	}
