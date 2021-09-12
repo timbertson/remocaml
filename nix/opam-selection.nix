@@ -774,6 +774,27 @@ in
       };
       version = "0.8";
     };
+    fieldslib = 
+    {
+      opamInputs = 
+      {
+        base = selection.base;
+        dune = selection.dune;
+        ocaml = selection.ocaml;
+      };
+      opamSrc = repoPath (repos.opam-repository.src) 
+      {
+        hash = "sha256:1gsrbs4x45k4bp1zih9c6db3axhaiy91knac6bk6hpgv9sjalicm";
+        package = "packages/fieldslib/fieldslib.v0.14.0";
+      };
+      pname = "fieldslib";
+      src = pkgs.fetchurl 
+      {
+        sha256 = "10n5y376fb5jgqk9h8vq158rm1b36h9lzh6p11q33h6xgvb1v6n3";
+        url = "https://ocaml.janestreet.com/ocaml-core/v0.14/files/fieldslib-v0.14.0.tar.gz";
+      };
+      version = "v0.14.0";
+    };
     fmt = 
     {
       opamInputs = 
@@ -1795,6 +1816,29 @@ in
       };
       version = "1.2.1";
     };
+    ppx_fields_conv = 
+    {
+      opamInputs = 
+      {
+        base = selection.base;
+        dune = selection.dune;
+        fieldslib = selection.fieldslib;
+        ocaml = selection.ocaml;
+        ppxlib = selection.ppxlib;
+      };
+      opamSrc = repoPath (repos.opam-repository.src) 
+      {
+        hash = "sha256:0332mrn1xk3423rm4hk5lif9igrj3339xyfd6464wcbkpakivfba";
+        package = "packages/ppx_fields_conv/ppx_fields_conv.v0.14.2";
+      };
+      pname = "ppx_fields_conv";
+      src = pkgs.fetchurl 
+      {
+        sha256 = "0r7d51j54r1za6bwqsmhmhhfab8n10zyk5zznhkm91f20dx9ddip";
+        url = "https://github.com/janestreet/ppx_fields_conv/archive/v0.14.2.tar.gz";
+      };
+      version = "v0.14.2";
+    };
     ppx_sexp_conv = 
     {
       opamInputs = 
@@ -1922,6 +1966,7 @@ in
         lwt_ppx = selection.lwt_ppx;
         lwt_react = selection.lwt_react;
         obus = selection.obus;
+        ppx_fields_conv = selection.ppx_fields_conv;
         ppx_sexp_conv = selection.ppx_sexp_conv;
         rresult = selection.rresult;
         vdoml = selection.vdoml;

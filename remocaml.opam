@@ -11,6 +11,7 @@ depends: [
   "lwt_react"
   "lwt_ppx"
   "ppx_sexp_conv"
+  "ppx_fields_conv"
   "vdoml"
   "rresult"
 ]
