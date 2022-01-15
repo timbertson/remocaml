@@ -169,7 +169,7 @@ let watch_output ~id ~termination ~emit filename =
 		Buffer.clear buffer;
 		emit (Ok (id, Output_line line))
 	in
-	emit (Ok (id, Output (Some [])));
+	emit (Ok (id, Output (Job.Output.Output [])));
 	let rec read next_timeout =
 		Lwt.bind (Lwt_io.read_char_opt channel) (function
 			| Some '\n' ->
@@ -219,13 +219,17 @@ let load_state config state_dir : state R.std_result =
 		(* TODO: delete old files? *)
 		let pid_states = files |> Array.to_list |> List.filter_map (fun filename ->
 			match String.cut ~rev:true ~sep:"." filename with
-				| Some (job_id, ext) when ext = state_ext ->
+				| Some (job_id, ext) when ext = state_ext -> (
 						let full_path = Filename.concat state_dir filename in
+						Log.debug (fun m->m"Loading job_state %s" full_path);
 						Some (full_path |> R.wrap (fun path ->
-							(job_id, pid_status_of_sexp (Sexp.load_sexp ~strict:true path))
+							let loaded = (Sexp.load_sexp ~strict:true path) in
+							Log.debug (fun m->m"Loaded: %a" Sexp.pp loaded);
+							(job_id, pid_status_of_sexp loaded)
 						) |> R.reword_error (fun cause -> let open Sexp in
 							List [ List [Atom "path"; Atom full_path]; cause]
 						))
+				)
 				| _ -> None
 		) in
 		let pid_states, pid_errs = R.partition pid_states in
@@ -260,13 +264,19 @@ let load_state config state_dir : state R.std_result =
 				| Some (ex, pid_status) -> Some ex, pid_status
 				| None -> None, None
 			in
+			Log.debug (fun m->m "Found execution %s with status %s for job %s (output_watch: %s)"
+				(Option.to_string Sexp.to_string (execution |> Option.map sexp_of_job_execution))
+				(Option.to_string Sexp.to_string (pid_status |> Option.map Job.sexp_of_process_state))
+				id
+				(match (execution |> Option.bind (fun ex -> ex.output_watch)) with | None -> "None" | Some _ -> "Some")
+			);
 			{
 				job_configuration = conf;
 				execution;
 				external_job = {
 					job = conf.Server_config.job;
 					state = pid_status;
-					output = None;
+					output = Job.Output.Undefined;
 				};
 			}
 		) job_map in
@@ -335,7 +345,7 @@ let show_output ~state job show = (
 				Lwt.cancel watch;
 				Ok [
 					Job_execution { execution with output_watch = None };
-					External (Output None); (* disable display *)
+					External (Output Job.Output.Undefined); (* disable display *)
 				]
 	) |> Option.default (Ok [])
 )

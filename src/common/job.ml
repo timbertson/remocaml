@@ -13,10 +13,32 @@ type process_state =
 	| Exited of int option
 	[@@deriving sexp]
 
+
+module Output = struct
+	(* This could be `string list option`, but Sexp serializes that
+	ambiguously - both None and Some [] end up as `()` *)
+	type t =
+		| Undefined
+		| Output of string list
+		[@@deriving sexp]
+
+	let desc = function
+		| Undefined -> "None"
+		| Output _ -> "Some(_)"
+
+	let map fn = function
+		| Undefined -> Undefined
+		| Output x -> Output (fn x)
+
+	let fold dfl fn = function
+		| Undefined -> dfl
+		| Output x -> fn x
+end
+
 type job = {
 	job: job_identity;
 	state: process_state option;
-	output: string list option;
+	output: Output.t;
 } [@@deriving sexp]
 
 type job_command =
@@ -31,7 +53,7 @@ type command = id * job_command
 
 type job_event =
 	| Process_state of process_state
-	| Output of string list option
+	| Output of Output.t
 	| Output_line of string
 	[@@deriving sexp]
 
@@ -56,8 +78,8 @@ let update_job job = function
 	| Process_state state -> { job with state = Some state }
 	| Output output -> { job with output = output }
 	| Output_line line ->
-			Log.info(fun m->m"adding line (is currently %b)" (Option.is_some job.output));
-			{ job with output = job.output |> Option.map (fun o -> o @ [line])
+			Log.info(fun m->m"adding line (is currently %s)" (Output.desc job.output));
+			{ job with output = job.output |> Output.map (fun o -> o @ [line])
 	}
 
 let update state (id, event) =

@@ -125,7 +125,7 @@ let view_job _instance =
 			| None | Some (Exited _) -> button "run" Start
 			| Some Running -> button "stop" Stop
 		in
-		let output_shown, output_display = output |> Option.fold
+		let output_shown, output_display = output |> Job.Output.fold
 			(false, [ empty ])
 			(fun output -> (true, match output with
 				| [] -> [ text "(no output)" ]
