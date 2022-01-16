@@ -122,8 +122,8 @@ let view_job _instance =
 	fun { job; state; output } -> (
 		let button = button job.id in
 		let start_or_stop = match state with
-			| None | Some (Exited _) -> button "run" Start
-			| Some Running -> button "stop" Stop
+			| Not_running | Exited _ -> button "run" Start
+			| Running -> button "stop" Stop
 		in
 		let output_shown, output_display = output |> Job.Output.fold
 			(false, [ empty ])

@@ -269,6 +269,7 @@ pre {
 		margin-top: 0;
 		margin-bottom: 0;
 
+		&.job-loading:before { content: fa-content($fa-var-spinner); }
 		&.job-run:before { content: fa-content($fa-var-play); }
 		&.job-stop:before { content: fa-content($fa-var-stop); }
 		&.job-list:before { content: fa-content($fa-var-list); }

@@ -183,15 +183,15 @@ let main () =
 	in
 
 	let config = Server_config.(load ~state_dir config_path) |> R.force in
-	let server_state = Server_state.load config |> R.force in
-	Log.debug(fun m->m"server state: %s" (Server_state.sexp_of_state server_state |> Sexp.to_string));
+	let state = ref (Server_state.load config |> R.force) in
+	Server_state.post_init state;
+	Log.debug(fun m->m"server state: %s" (Server_state.sexp_of_state !state |> Sexp.to_string));
 
 	let static_cache = StringMap.empty in
 	let static_cache = StringSet.fold (fun path map ->
 		StringMap.add path (read_entire_file (Filename.concat static_root path)) map
 	) static_files static_cache in
 
-	let state = ref server_state in
 	let callback = handler ~config ~static_cache ~static_root ~state in
 	let mode = `TCP (
 		if Unix.getenv_opt "LISTEN_PID" |> Option.fold false (fun listen -> listen = string_of_int (Unix.getpid ()))

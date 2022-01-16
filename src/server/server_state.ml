@@ -26,6 +26,23 @@ let load config =
 		}
 	)
 
+let invoke_job_command state_ref cmd =
+	(* when we run a command, it needs to be able to autonomously update the job
+	state upon termination *)
+	let update_state : (Server_job.state -> Server_job.state) -> unit =
+		fun update ->
+			let state = !state_ref in
+			state_ref := { state with server_jobs = update state.server_jobs }
+	in
+	Server_job.invoke update_state !state_ref.server_jobs cmd
+
+let post_init state_ref =
+	(* After loading the state ref, init all jobs. This sets up
+	watchers, automatically updating the state ref on termination *)
+	(!state_ref).server_jobs.jobs |> StringMap.iter (fun id job ->
+		invoke_job_command state_ref (id, Init)
+	)
+
 let client_state state =
 	State.({
 		music_state = Music.init ();
@@ -40,7 +57,7 @@ let client_state state =
 				) |> List.map Server_job.external_of_job;
 		};
 	})
-
+	
 let invoke state_ref : Event.command -> Event.event list R.std_result Lwt.t = fun command ->
 	let state = !state_ref in
 	let open Event in
@@ -48,7 +65,5 @@ let invoke state_ref : Event.command -> Event.event list R.std_result Lwt.t = fu
 	| Music_command cmd ->
 		Server_music.invoke state.server_music_state cmd |> Lwt.map (R.map Option.to_list)
 	| Job_command cmd ->
-			Lwt.return (Server_job.invoke state.server_jobs cmd |> R.map (fun (job_state, events) ->
-			state_ref := { state with server_jobs = { state.server_jobs with jobs = job_state }};
-			events
-		))
+		invoke_job_command state_ref cmd;
+		Lwt.return (Ok [])
