@@ -123,7 +123,7 @@ let view_job _instance =
 		let button = button job.id in
 		let start_or_stop = match state with
 			| Not_running | Exited _ -> button "run" Start
-			| Running -> button "stop" Stop
+			| Running _ -> button "stop" Stop
 		in
 		let output_shown, output_display = output |> Job.Output.fold
 			(false, [ empty ])

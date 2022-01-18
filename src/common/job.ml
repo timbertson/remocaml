@@ -8,9 +8,12 @@ type job_identity = {
 	name: string;
 } [@@deriving sexp]
 
+type pid = int [@@deriving sexp]
+
+(* serialized to CONFIG_DIR/<job-id>.state *)
 type process_state =
 	| Not_running (* not yet inspected; happens on load *)
-	| Running
+	| Running of pid
 	| Exited of int option
 	[@@deriving sexp]
 

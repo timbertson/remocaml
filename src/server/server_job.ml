@@ -34,7 +34,6 @@ let devnull = Unix.(openfile "/dev/null" [O_RDONLY; O_CLOEXEC]) 0o600
 (* A job execution. Either running or recently-run *)
 type job_execution = {
 	job_id: string;
-	pid: int;
 	termination: (unit Lwt.t option [@sexp.opaque]);
 	output_watch: (unit Lwt.t option [@sexp.opaque]);
 }
@@ -43,7 +42,6 @@ let sexp_of_job_execution = fun ex ->
 	let open Sexp in
 	List [
 		List [ Atom "job_id"; Atom ex.job_id ];
-		List [ Atom "pid"; sexp_of_int ex.pid ];
 		List [ Atom "termination"; Atom (
 			match ex.termination with
 				| Some _ -> "Some"
@@ -94,18 +92,6 @@ let open_readable path =
 let open_writeable path =
 	Unix.openfile path Unix.[O_WRONLY; O_CREAT; O_TRUNC; O_CLOEXEC] 0o600
 
-(* serialized to CONFIG_DIR/<job-id>.state *)
-(* TODO: roll PID into running, since that's the only state it makes sense in *)
-type pid_status = {
-	ps_pid: int;
-	ps_state: Job.process_state;
-} [@@deriving sexp]
-
-let pid_status_of_job job = job.execution |> Option.map (fun ex -> {
-	ps_pid = ex.pid;
-	ps_state = job.external_job.state;
-})
-
 type internal_event =
 	| External of Job.job_event
 	| Job_execution of (Job.process_state * job_execution)
@@ -115,23 +101,20 @@ let external_of_job job = job.external_job
 
 type emit_internal = internal_event R.std_result -> unit
 
-let update_pid_status ~state_dir ~id status =
+let persist_process_state ~state_dir ~id state =
 	let path = state_filename ~state_dir ~job_id:id in
-	Log.debug(fun m->m"updating pid status at %s" path);
-	match status with
-		| None -> Unix_ext.ensure_unlinked path
-		| Some status ->
-			let tmp = path ^ ".tmp" in
-			let contents = Sexp.to_string (sexp_of_pid_status status) |> Bytes.of_string in
-			let f = open_writeable tmp in
-			let () = try
-				let _:int = Unix.write f contents 0 (Bytes.length contents) in
-				Unix.close f;
-			with e -> (
-				Unix.close f; raise e
-			) in
-			Unix.rename tmp path
-			
+	Log.debug(fun m->m"updating pid state at %s" path);
+	let tmp = path ^ ".tmp" in
+	let contents = Sexp.to_string (Job.sexp_of_process_state state) |> Bytes.of_string in
+	let f = open_writeable tmp in
+	let () = try
+		let _:int = Unix.write f contents 0 (Bytes.length contents) in
+		Unix.close f;
+	with e -> (
+		Unix.close f; raise e
+	) in
+	Unix.rename tmp path
+
 (* emit an internal event by:
 - translating into a public event
 - updating server state (and filesystem) if necessary
@@ -140,7 +123,7 @@ let emit_and_update_internal : id:string -> internal_event R.std_result -> state
 	= fun ~id (event: internal_event R.std_result) state ->
 	state.jobs |> StringMap.find_opt id |> Option.map (fun initial_job ->
 		Log.debug (fun m->m"Emitting internal event: %a" Sexp.pp (R.sexp_of_result sexp_of_internal_event event));
-		let initial_status = pid_status_of_job initial_job in
+		let initial_state = initial_job.external_job.state in
 		let id = id_of_job initial_job in
 		let job = match event with
 			| Ok (External event) ->
@@ -179,10 +162,9 @@ let emit_and_update_internal : id:string -> internal_event R.std_result -> state
 		in
 		let new_state = { state with jobs = StringMap.add id job state.jobs } in
 
-		let pid_status = pid_status_of_job job in
 		(* keep on disk version accurate *)
-		if (initial_status <> pid_status) then (
-			update_pid_status ~state_dir:state.dir ~id pid_status
+		if (initial_state <> job.external_job.state) then (
+			persist_process_state ~state_dir:state.dir ~id job.external_job.state
 		);
 		new_state
 	) |> Option.default_fn (fun () ->
@@ -198,10 +180,9 @@ let is_running pid =
 	with
 		Unix_error (ESRCH, _, _) -> false
 
-let get_process_state pid = let open Job in function
-	| Exited _ as state -> state
-	(* Note: Not_running shouldn't happen, but if we have a pid we might as well check *)
-	| Running | Not_running -> if is_running pid then Running else Exited None
+let check_process_state = let open Job in function
+	| Exited _ | Not_running as state -> state
+	| Running pid -> if is_running pid then Running pid else Exited None
 
 let poll_delay_max = 2.0
 let poll_delay_min = 0.5
@@ -241,7 +222,7 @@ let watch_termination ~state_dir ~id ~(emit_internal:emit_internal) pid =
 				if is_running pid then (
 					next ()
 				) else (
-					(* we don't know its status, but it's dead *)
+					(* we don't know its state, but it's dead *)
 					Lwt.return None
 				)
 			)
@@ -304,7 +285,7 @@ let load_state config state_dir : state R.std_result =
 	Unix_ext.mkdir_p state_dir;
 	R.wrap Sys.readdir state_dir |> R.map (fun files ->
 		(* TODO: delete old files? *)
-		let pid_states = files |> Array.to_list |> List.filter_map (fun filename ->
+		let process_states = files |> Array.to_list |> List.filter_map (fun filename ->
 			match String.cut ~rev:true ~sep:"." filename with
 				| Some (job_id, ext) when ext = state_ext -> (
 						let full_path = Filename.concat state_dir filename in
@@ -312,18 +293,18 @@ let load_state config state_dir : state R.std_result =
 						Some (full_path |> R.wrap (fun path ->
 							let loaded = (Sexp.load_sexp ~strict:true path) in
 							Log.debug (fun m->m"Loaded: %a" Sexp.pp loaded);
-							(job_id, pid_status_of_sexp loaded)
+							(job_id, Job.process_state_of_sexp loaded)
 						) |> R.reword_error (fun cause -> let open Sexp in
 							List [ List [Atom "path"; Atom full_path]; cause]
 						))
 				)
 				| _ -> None
 		) in
-		let pid_states, pid_errs = R.partition pid_states in
+		let process_states, pid_errs = R.partition process_states in
 		pid_errs |> List.iter (fun err ->
 			Log.warn (fun m->m"%s" (Sexp.to_string err))
 		);
-		let pid_map = pid_states |> StringMap.from_list in
+		let process_map = process_states |> StringMap.from_list in
 
 		(* TODO: represent events as a react stream with compositions of log & status, rather
 		 * than imperatively emitting events *)
@@ -337,22 +318,20 @@ let load_state config state_dir : state R.std_result =
 		(* then merge it with executions *)
 		let jobs = StringMap.mapi (fun id conf ->
 
-			let (execution, pid_status) = match StringMap.find_opt id pid_map with
-				| Some pid_status -> (
-					let pid = pid_status.ps_pid in
-					let pid_status = get_process_state pid pid_status.ps_state in
+			let (execution, process_state) = match StringMap.find_opt id process_map with
+				| Some process_state -> (
 					let execution = {
 						job_id = id;
-						pid; termination = None;
+						termination = None;
 						output_watch = None;
 					} in
-					Some execution, pid_status
+					Some execution, check_process_state process_state
 				)
 				| None -> None, Not_running
 			in
 			Log.debug (fun m->m "Found execution %s with status %s for job %s (output_watch: %s)"
 				(Option.to_string Sexp.to_string (execution |> Option.map sexp_of_job_execution))
-				(Sexp.to_string (Job.sexp_of_process_state pid_status))
+				(Sexp.to_string (Job.sexp_of_process_state process_state))
 				id
 				(match (execution |> Option.bind (fun ex -> ex.output_watch)) with | None -> "None" | Some _ -> "Some")
 			);
@@ -361,13 +340,13 @@ let load_state config state_dir : state R.std_result =
 				execution;
 				external_job = {
 					job = conf.Server_config.job;
-					state = pid_status;
+					state = process_state;
 					output = Job.Output.Undefined;
 				};
 			}
 		) job_map in
 
-		pid_map |> StringMap.iter (fun id _ ->
+		process_map |> StringMap.iter (fun id _ ->
 			if not (StringMap.mem id jobs) then
 				Log.warn (fun m->m"Running job has no corresponding configuration, ignoring: %s" id);
 		);
@@ -379,13 +358,18 @@ let load_state config state_dir : state R.std_result =
 	)
 
 let stop job : unit R.std_result =
-	job.execution |> Option.map (function { pid; termination; _ } ->
-		Log.info (fun m->m"stopping job with PID %d" pid);
-		R.wrap (Unix.kill (-pid)) Sys.sigint
-	) |> Option.default_fn (fun () ->
-		Log.warn (fun m->m"can't stop job %s, it has no execution" job.job_configuration.job.id);
-		Ok ()
-	)
+	match job.external_job.state with
+		| Running pid -> (
+			Log.info (fun m->m"stopping job with PID %d" pid);
+			R.wrap (Unix.kill (-pid)) Sys.sigint
+		)
+		| Not_running | Exited _ -> (
+			Log.warn (fun m->m"can't stop job %s in state %a"
+				job.job_configuration.job.id
+				Sexp.pp (Job.sexp_of_process_state job.external_job.state)
+			);
+			Ok ()
+		)
 
 let create_detached_process exe argv stdin stdout =
 	R.wrap Unix.fork () |> R.map (function
@@ -415,32 +399,27 @@ let start_watching_output ~state ~(config:Server_config.job_configuration) ~term
 
 let show_output ~(emit_internal:emit_internal) ~state job show: unit R.std_result = (
 	job.execution |> Option.map (fun execution ->
-		match show, execution.output_watch with
-			| true, Some(_) | false, None -> (
-				Log.info (fun m->m"Not toggling output display to %b, it already is" show);
-				Ok ()
-			)
-
-			| true, None -> (match execution.termination with
-				| Some termination ->
+		if show then (
+			match execution.termination with
+				| Some termination -> (
 					let config = job.job_configuration in
+					execution.output_watch |> Option.may Lwt.cancel;
 					emit_internal (Ok (Job_execution (
 						job.external_job.state,
 						start_watching_output ~state ~config ~termination execution
 					)));
 					Ok ()
+				)
 				| None ->
 					Error (Sexp.Atom "Process is not yet initialized")
-			)
-
-			| false, Some(watch) -> (
-				Lwt.cancel watch;
-				emit_internal (Ok (Job_execution (
-					job.external_job.state,
-					{ execution with output_watch = None }
-				)));
-				Ok ()
-			)
+		) else (
+			execution.output_watch |> Option.may Lwt.cancel;
+			emit_internal (Ok (Job_execution (
+				job.external_job.state,
+				{ execution with output_watch = None }
+			)));
+			Ok ()
+		)
 	) |> Option.default (Ok ())
 )
 
@@ -452,9 +431,8 @@ let init_job ~(emit_internal:emit_internal) ~state job : unit R.std_result = (
 			| Some t -> Ok ()
 			| None -> (
 				let termination = match job.external_job.state with
-					| Running -> Lwt.catch (fun () -> watch_termination
-						~state_dir:state.dir ~id:execution.job_id ~emit_internal execution.pid
-					) (fun e -> Log.warn(fun m->m"DIED; %s" (Printexc.to_string e)); Lwt.return_unit)
+					| Running pid -> watch_termination
+						~state_dir:state.dir ~id:execution.job_id ~emit_internal pid
 					| Not_running | Exited _ -> Lwt.return_unit
 				in
 				emit_internal
@@ -469,7 +447,7 @@ let init_job ~(emit_internal:emit_internal) ~state job : unit R.std_result = (
 
 let start ~(emit_internal:emit_internal) ~state job : unit R.std_result = (
 	(match job.external_job.state with
-		| Running -> Error (Sexp.Atom "Job is already running")
+		| Running _ -> Error (Sexp.Atom "Job is already running")
 		| Not_running | Exited _ -> Ok ()
 	) |> R.bindr (fun () ->
 		let config = job.job_configuration in
@@ -489,9 +467,8 @@ let start ~(emit_internal:emit_internal) ~state job : unit R.std_result = (
 					in
 
 					emit_internal (Ok (
-						Job_execution (Running, start_watching_output ~state ~config ~termination {
+						Job_execution (Running pid, start_watching_output ~state ~config ~termination {
 							job_id = config.job.id;
-							pid = pid;
 							termination = Some termination;
 							output_watch = None;
 						})
