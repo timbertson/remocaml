@@ -1,10 +1,14 @@
-{ pkgs, stdenv, lib, opam2nix, vdoml, self }:
+let sources = import ./sources.nix {}; in
+{ pkgs, stdenv, lib,
+	opam2nix ? pkgs.callPackage sources.opam2nix {},
+	vdoml ? sources.vdoml,
+}:
 let
 	ocaml = pkgs.ocaml-ng.ocamlPackages_4_12.ocaml;
 	opamArgs = {
 		inherit ocaml;
 		src = {
-			remocaml = self;
+			remocaml = sources.local { url = ../.; };
 			vdoml = vdoml;
 		};
 		selection = ./opam-selection.nix;
