@@ -17,10 +17,10 @@
         "homepage": null,
         "owner": "timbertson",
         "repo": "vdoml",
-        "rev": "dddb1f016d728d255567ea2eb603a255ab9bcd9b",
-        "sha256": "1hyvzpdkqs87hvzb107249f7ximx5357bxfdp4pkvv275db2kmwm",
+        "rev": "27910bb472e6da4d2c69f959b0c5582f6f1eca6b",
+        "sha256": "15almjk3c5c2iwcfsyawbr3cgj6fvdf15cry9k4vk5m065vn5bw4",
         "type": "tarball",
-        "url": "https://github.com/timbertson/vdoml/archive/dddb1f016d728d255567ea2eb603a255ab9bcd9b.tar.gz",
+        "url": "https://github.com/timbertson/vdoml/archive/27910bb472e6da4d2c69f959b0c5582f6f1eca6b.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     }
 }

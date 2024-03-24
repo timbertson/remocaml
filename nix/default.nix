@@ -4,7 +4,7 @@ let sources = import ./sources.nix {}; in
 	vdoml ? sources.vdoml,
 }:
 let
-	ocaml = pkgs.ocaml-ng.ocamlPackages_4_12.ocaml;
+	ocaml = pkgs.ocaml-ng.ocamlPackages_4_14.ocaml;
 	opamArgs = {
 		inherit ocaml;
 		src = {
@@ -12,6 +12,15 @@ let
 			vdoml = vdoml;
 		};
 		selection = ./opam-selection.nix;
+		override = {}: {
+			dune = base: base.overrideAttrs (base: {
+				buildInputs = (base.buildInputs or []) ++
+				(lib.optionals stdenv.isDarwin (with pkgs.darwin.apple_sdk;
+					[ frameworks.CoreServices ]
+				));
+			});
+		};
+
 	};
 	opamPackages = opam2nix.build opamArgs;
 in
