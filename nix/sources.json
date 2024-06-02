@@ -1,0 +1,26 @@
+{
+    "fetlock": {
+        "branch": "master",
+        "description": "Convert any lockfile to a nix expression",
+        "homepage": "",
+        "owner": "timbertson",
+        "repo": "fetlock",
+        "rev": "197809ffb96ca1edd530b8855c630169d328b119",
+        "sha256": "0k99rcnqxhq411lxnpkzzgfx81s4wv0fbpc6k33pl19cfzpv52jm",
+        "type": "tarball",
+        "url": "https://github.com/timbertson/fetlock/archive/197809ffb96ca1edd530b8855c630169d328b119.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
+    "vdoml": {
+        "branch": "master",
+        "description": "virtual DOM + OCaml",
+        "homepage": null,
+        "owner": "timbertson",
+        "repo": "vdoml",
+        "rev": "27910bb472e6da4d2c69f959b0c5582f6f1eca6b",
+        "sha256": "15almjk3c5c2iwcfsyawbr3cgj6fvdf15cry9k4vk5m065vn5bw4",
+        "type": "tarball",
+        "url": "https://github.com/timbertson/vdoml/archive/27910bb472e6da4d2c69f959b0c5582f6f1eca6b.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    }
+}

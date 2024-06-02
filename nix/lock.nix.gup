@@ -1,0 +1,3 @@
+#!bash -eu
+cd ..
+fetlock -o "$1" --add "$VDOML_SRC/vdoml.opam" --add utop

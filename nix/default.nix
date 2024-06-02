@@ -1,26 +1,22 @@
-{ pkgs, stdenv, lib, opam2nix, vdoml, self }:
+{ callPackage, stdenv, lib }:
 let
-	ocaml = pkgs.ocaml-ng.ocamlPackages_4_08.ocaml;
-	opamArgs = {
-		inherit ocaml;
-		src = {
-			remocaml = self;
-			vdoml = vdoml;
-		};
-		selection = ./opam-selection.nix;
+	sources = callPackage ./sources.nix {};
+	fetlock = callPackage sources.fetlock {};
+	selection = fetlock.opam.load ./lock.nix {
+		pkgOverrides = self: [
+			(self.setSources {
+				inherit (sources) vdoml;
+				remocaml = sources.local { url = ../.; };
+			})
+		];
 	};
-	opamPackages = opam2nix.build opamArgs;
+	opamPackages = selection.drvsByName;
 in
+
 {
-	inherit opam2nix vdoml;
-	inherit (opamPackages) remocaml;
+	inherit (opamPackages) remocaml vdoml;
 	shell = opamPackages.remocaml.overrideAttrs (o: {
+		VDOML_SRC = vdoml;
 		propagatedBuildInputs = o.propagatedBuildInputs ++ [ opamPackages.utop ];
 	});
-	resolve = opam2nix.resolve opamArgs [
-		"${vdoml}/vdoml.opam"
-		../remocaml.opam
-		"utop"
-	];
 }
-
