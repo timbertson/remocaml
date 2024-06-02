@@ -428,6 +428,12 @@ in
         installPhase = "";
         mode = "opam";
       };
+      extraSources = {
+        "test.c" = (pkgs.fetchurl {
+          hash = "sha256-VKMHNfHycaJTFSZ0fnVxb0SQ3XvBVG79ZJjM/jzE1vs=";
+          url = "https://raw.githubusercontent.com/ocaml/opam-source-archives/main/patches/conf-gmp/test.c.4";
+        });
+      };
     };
     conf-gmp-powm-sec = {
       pname = "conf-gmp-powm-sec";
@@ -439,6 +445,12 @@ in
         buildPhase = "sh -exc \"cc -c $CFLAGS -I/opt/homebrew/include -I/opt/local/include -I/usr/local/include test.c\"";
         installPhase = "";
         mode = "opam";
+      };
+      extraSources = {
+        "test.c" = (pkgs.fetchurl {
+          hash = "sha256-OIs4eVMCV6fm5ZtoII7ipS3nvjDkDrTTpUQZcI/a1JA=";
+          url = "https://raw.githubusercontent.com/ocaml/opam-source-archives/main/patches/conf-gmp-powm-sec/test.c.3";
+        });
       };
     };
     conf-python-3 = {
@@ -453,6 +465,12 @@ in
         ];
         installPhase = "";
         mode = "opam";
+      };
+      extraSources = {
+        "test.py" = (pkgs.fetchurl {
+          hash = "sha256-UHOLWfdHv2Rk7Gmgg8fyHnaPCnffZSCgkWNsdLsbe3c=";
+          url = "https://raw.githubusercontent.com/ocaml/opam-source-archives/main/patches/conf-python-3/test.py";
+        });
       };
     };
     cppo = {
@@ -564,6 +582,20 @@ in
               "
         '';
         mode = "opam";
+      };
+      extraSources = {
+        "dl/flexdll.tar.gz" = (pkgs.fetchurl {
+          hash = "sha256-UabvLmf/R1wzp2s9yGQBoPKGyaMznugUUFPqAtL7WXQ=";
+          url = "https://github.com/alainfrisch/flexdll/archive/0.39.tar.gz";
+        });
+        "dl/homebrew-bundle.tar.gz" = (pkgs.fetchurl {
+          hash = "sha256-EMAkynhxzqNrTCeyYBlx0/psum83hVYTuvACbQ9VXnY=";
+          url = "https://github.com/Homebrew/homebrew-bundle/archive/4756e4c4cf95485c5ea4da27375946c1dac2c71d.tar.gz";
+        });
+        "dl/ocaml.tar.gz" = (pkgs.fetchurl {
+          hash = "sha256-9aSKkFV8tHrOexWQ/KsTYqGvOGKaIYNQ9pwiXFfpakE=";
+          url = "https://github.com/ocaml/ocaml/archive/4.12.1.tar.gz";
+        });
       };
     };
     dkml-runtime-common = {
@@ -1260,6 +1292,16 @@ in
         installPhase = "";
         mode = "opam";
       };
+      extraSources = {
+        "gen_ocaml_config.ml.in" = (pkgs.fetchurl {
+          hash = "sha256-qa2NhKCJYRWWU6l425LRD2lFEBgrIGysuW1cn2O1Eh4=";
+          url = "https://raw.githubusercontent.com/ocaml/opam-source-archives/main/patches/ocaml-config/gen_ocaml_config.ml.in.3";
+        });
+        "ocaml-config.install" = (pkgs.fetchurl {
+          hash = "sha256-bk/ZP0zOa60O08CK/QJI2+fXgXEJKB3mKU5bXvVZcFE=";
+          url = "https://raw.githubusercontent.com/ocaml/opam-source-archives/main/patches/ocaml-config/ocaml-config.install";
+        });
+      };
     };
     ocaml-syntax-shims = {
       pname = "ocaml-syntax-shims";
@@ -1318,6 +1360,12 @@ in
           install -m 0755 ocaml-stub $out/bin/ocaml
         '';
         mode = "opam";
+      };
+      extraSources = {
+        "0001-Harden-test-for-OCaml-5.patch" = (pkgs.fetchurl {
+          hash = "sha256-b8yl8ver+NYwTabDhTSFhAE/+4YCciqH+wusurWGf+g=";
+          url = "https://raw.githubusercontent.com/ocaml/opam-source-archives/main/patches/ocamlfind/0001-Harden-test-for-OCaml-5.patch";
+        });
       };
     };
     ocplib-endian = {
@@ -1608,6 +1656,16 @@ in
         buildPhase = "";
         installPhase = "";
         mode = "opam";
+      };
+      extraSources = {
+        "META.seq" = (pkgs.fetchurl {
+          hash = "sha256-6VBitNBRnvgzXAL30PGVLRG4FMerfm1WaiBhFhYvor4=";
+          url = "https://raw.githubusercontent.com/ocaml/opam-source-archives/main/patches/seq/META.seq";
+        });
+        "seq.install" = (pkgs.fetchurl {
+          hash = "sha256-//kmwsTVqCtslMYMTDXrBuPTmXWJPr5rHw5lV8vjSQQ=";
+          url = "https://raw.githubusercontent.com/ocaml/opam-source-archives/main/patches/seq/seq.install";
+        });
       };
     };
     sexplib = {

@@ -16,7 +16,7 @@ in
 {
 	inherit (opamPackages) remocaml vdoml;
 	shell = opamPackages.remocaml.overrideAttrs (o: {
-		VDOML_SRC = vdoml;
+		VDOML_SRC = sources.vdoml;
 		propagatedBuildInputs = o.propagatedBuildInputs ++ [ opamPackages.utop ];
 	});
 }
