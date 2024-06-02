@@ -1,6 +1,6 @@
 opam-version: "2.0"
 authors: [ "tim@gfxmonk.net" ]
-homepage: "https://github.com/timbertson/vdoml"
+homepage: "https://github.com/timbertson/remocaml"
 maintainer: "tim@gfxmonk.net"
 depends: [
   "dune"
